@@ -8,7 +8,7 @@ from manimlib.imports import *
 sys.path.append(".")
 
 from config import (
-    BACKGROUND,
+    BACKGROUND_COLOR,
     CLASS,
     CONTEST_END,
     CONTEST_START,
@@ -37,7 +37,7 @@ with open(os.path.join(PATH_OUTPUT, "ranking.json")) as f:
 
 class Slide(Scene):
     CONFIG = {
-        "camera_config": {"background_color": BACKGROUND},
+        "camera_config": {"background_color": BACKGROUND_COLOR},
     }
 
     def construct(self):
@@ -300,7 +300,7 @@ class Slide(Scene):
         cup.set_color(MEDAL_COLORS["gold"])
 
         pos = TextMobject(str(pos_num), background_stroke_width=0)
-        pos.set_color(BACKGROUND)
+        pos.set_color(BACKGROUND_COLOR)
         pos.scale(3)
         pos.shift(1.3 * UP)
 
