@@ -7,11 +7,11 @@ MAX_SCORE = 400
 WINNER_CONFETTI = False
 
 # Debugging
-NUM_USERS = None
+NUM_USERS = 3
 MEDAL = "gold"
 
 # Data on disk
-PATH_LOGO = "./logo.png"
+PATH_LOGO = "./noface.png"
 PATH_CUP = "./cup.svg"
 PATH_OUTPUT = "./output"
 SCREEN_DIR = "./screenshots"
