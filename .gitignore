@@ -1,0 +1,10 @@
+output/
+subs/
+faces/
+screenshots/
+ranking/
+ranking.csv
+__pycache__/
+media/
+photos/
+*.jpg
