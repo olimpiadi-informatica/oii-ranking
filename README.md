@@ -25,7 +25,7 @@ pip install manimlib
 ./preprocess.py
 ```
 
-Now inside of `./output` there is some preprocessed data. In particular, the images of the faces have been normalized by cropping a square in the center and stored in `./output/faces`. This processes is not perfect and can be manually tuned by replcaing the images inside that folder. `./preprocess.py` won't overwrite them.
+Now inside of `./output` there is some preprocessed data. In particular, the images of the faces have been normalized by cropping a square in the center and stored in `./output/faces`. This process is not perfect and can be manually tuned by replacing the images inside that folder. `./preprocess.py` won't overwrite them.
 
 #### Render a medal
 
