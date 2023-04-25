@@ -1,9 +1,10 @@
 import json
 import os.path
+import random
 from datetime import datetime
 from glob import glob
 
-from manimlib.imports import *
+from manim import *
 
 sys.path.append(".")
 
@@ -36,11 +37,8 @@ with open(os.path.join(PATH_OUTPUT, "ranking.json")) as f:
 
 
 class Slide(Scene):
-    CONFIG = {
-        "camera_config": {"background_color": BACKGROUND_COLOR},
-    }
-
     def construct(self):
+        self.camera.background_color = BACKGROUND_COLOR
         self.timelapse_dur = TIMELAPSE_DURATION
         self.start_time = datetime.strptime(CONTEST_START, "%Y-%m-%dT%H:%M:%S")
         self.end_time = datetime.strptime(CONTEST_END, "%Y-%m-%dT%H:%M:%S")
@@ -80,7 +78,7 @@ class Slide(Scene):
                 self.cup(self.position)
 
             # name
-            name = TextMobject(user["name"])
+            name = Tex(user["name"])
             name.scale(1.4)
             name.to_corner(UP + LEFT)
 
@@ -89,7 +87,7 @@ class Slide(Scene):
             school = user["school"]
             city = user["city"]
             province = " (%s)" % user["province"] if user["province"] else ""
-            sub = TextMobject(f"Classe {klass}, {school}, {city}{province}")
+            sub = Tex(f"Classe {klass}, {school}, {city}{province}")
             sub.scale(0.8)
             sub.next_to(name, DOWN)
             sub.set_x(name.get_x() - name.get_width() / 2, LEFT)
@@ -112,7 +110,7 @@ class Slide(Scene):
             self.play(
                 write_name,
                 Write(sub, run_time=write_name.run_time),
-                FadeInFrom(img, direction=LEFT),
+                FadeIn(img, shift=RIGHT),
             )
 
             # timelapse
@@ -162,10 +160,10 @@ class Slide(Scene):
 
             # medal
             medal = ImageMobject(PATH_MEDAL)
-            medal.scale(1.5)
+            medal.scale(0.75)
             medal.set_color(MEDAL_COLORS[user["medal"]])
             medal.move_to([2, 0, 0])  # TODO: fix medal Y position
-            position = TextMobject(r"\textbf{%d}" % self.position)
+            position = Tex(r"\textbf{%d}" % self.position)
             position.scale(2)
             position.move_to(medal)
             position.set_color(BLACK)
@@ -182,8 +180,8 @@ class Slide(Scene):
                 LaggedStart(
                     AnimationGroup(
                         *confetti_anim,
-                        FadeInFromLarge(medal),
-                        FadeInFromLarge(position),
+                        FadeIn(medal, scale=2),
+                        FadeIn(position, scale=2),
                     )
                 ),
             )
@@ -192,7 +190,7 @@ class Slide(Scene):
             po = Circle(stroke_color=WHITE)
             po.scale(0.5)
             po.next_to(medal)
-            po_text = TextMobject("PO")
+            po_text = Tex("PO")
             po_text.move_to(po)
             if user["po"]:
                 self.play(
@@ -235,7 +233,7 @@ class Slide(Scene):
 
     def get_score(self, index):
         points = int(self.history[index]["score"])
-        score = TextMobject(f"{points} / {MAX_SCORE}")
+        score = Tex(f"{points} / {MAX_SCORE}")
         score.scale(1.2)
         score.next_to(self.screen, UP + RIGHT)
         score.set_x(self.screen.get_x() + self.screen.get_width() / 2, RIGHT)
@@ -271,8 +269,8 @@ class Slide(Scene):
             now_time = self.start_time + (self.end_time - self.start_time) * now_perc
             self.progress.set_width(
                 self.screen.get_width() * max(0.0001, min(now_perc, 1)),
-                stretch=True,
-                about_edge=LEFT,
+                #stretch=True, #TODO: figure this out!!
+                #about_edge=LEFT,
             )
             self.progress.set_x(
                 self.screen.get_x()
@@ -299,27 +297,33 @@ class Slide(Scene):
         cup.scale(2)
         cup.set_color(MEDAL_COLORS["gold"])
 
-        pos = TextMobject(str(pos_num), background_stroke_width=0)
+        pos = Tex(str(pos_num), background_stroke_width=0)
         pos.set_color(BACKGROUND_COLOR)
         pos.scale(3)
         pos.shift(1.3 * UP)
 
         self.play(Write(cup, run_time=2), Write(pos, run_time=0.001))
         self.wait(2)
-        self.play(FadeOutAndShift(cup), FadeOutAndShift(pos))
+        self.play(FadeOut(cup, shift=DOWN), FadeOut(pos, shift=DOWN))
 
 
 class ConfettiSpiril(Animation):
-    CONFIG = {
-        "x_start": 0,
-        "spiril_radius": 0.5,
-        "num_spirils": 4,
-        "run_time": 15,
-        "rate_func": None,
-    }
-
     def __init__(self, mobject, **kwargs):
-        digest_config(self, kwargs)
+        d = {
+            "x_start": 0,
+            "spiril_radius": 0.5,
+            "num_spirils": 4,
+            "run_time": 15,
+            "rate_func": None,
+        }
+        d.update(kwargs)
+        for k,v in d.items():
+            setattr(self, k, v)
+        Animation.__init__(
+            self,
+            mobject,
+            **d
+        )
         mobject.next_to(self.x_start * RIGHT + FRAME_Y_RADIUS * UP, UP)
         self.total_vert_shift = FRAME_HEIGHT + mobject.get_height() + 2 * MED_SMALL_BUFF
 
@@ -364,18 +368,24 @@ def get_confetti_animations(num_confetti_squares):
 
 
 class ConfettiBoom(Animation):
-    CONFIG = {
-        "x_start": 0,
-        "y_start": 0,
-        "direction": 0,
-        "speed": 2,
-        "spiril_radius": 0.5,
-        "num_spirils": 2,
-        "run_time": 1.5,
-    }
-
     def __init__(self, mobject, **kwargs):
-        digest_config(self, kwargs)
+        d = {
+            "x_start": 0,
+            "y_start": 0,
+            "direction": 0,
+            "speed": 2,
+            "spiril_radius": 0.5,
+            "num_spirils": 2,
+            "run_time": 1.5,
+        }
+        d.update(kwargs)
+        for k,v in d.items():
+            setattr(self, k, v)
+        Animation.__init__(
+            self,
+            mobject,
+            **d
+        )
         self.direction_v = np.array([np.cos(self.direction), np.sin(self.direction), 0])
         self.phase = random.random() * 2 * np.pi
         mobject.shift(np.array([self.x_start, self.y_start, 0]))
