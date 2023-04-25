@@ -8,3 +8,6 @@ __pycache__/
 media/
 photos/
 *.jpg
+.DS_Store
+.log
+
