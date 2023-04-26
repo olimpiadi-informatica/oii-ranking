@@ -1,13 +1,13 @@
 #!/usr/bin/env python3
 
 # Contest information
-CONTEST_START = "2021-11-16T13:30:00"
-CONTEST_END = "2021-11-16T18:30:01"
-MAX_SCORE = 400
-WINNER_CONFETTI = False
+CONTEST_START = "2023-04-18T14:00:00"
+CONTEST_END = "2023-04-18T17:00:01"
+MAX_SCORE = 200
+WINNER_CONFETTI = True
 
 # Debugging
-NUM_USERS = 3
+NUM_USERS = 1
 MEDAL = "gold"
 
 # Data on disk
@@ -37,5 +37,9 @@ CLASS = {
     3: "III",
     4: "IV",
     5: "V",
+    6: "I",
+    7: "II",
+    8: "III",
 }
-TIMELAPSE_DURATION = 5
+TIMELAPSE_DURATION = 3
+WINNER_CONFETTI_DURATION = 10
