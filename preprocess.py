@@ -59,20 +59,20 @@ def get_terry_data(dir: str):
     return submissions, subchanges
 
 def fake_screenshots(dir: str, usernames, start, end):
-    screens = glob.glob(os.path.join(dir, "20*00.png"))
+    screens = glob.glob(os.path.join(dir, "20*00.0.png"))
     if len(screens) == 0:
         subprocess.run(
             ["asy", "clock.asy", "-f", "png", "-globalwrite", "-antialias", "4"],
             input=bytes(config.CONTEST_START + " " + config.CONTEST_END, "utf-8")
         )
-        screens = glob.glob(os.path.join(dir, "20*00.png"))
+        screens = glob.glob(os.path.join(dir, "20*00.0.png"))
     for user in usernames:
         if not os.path.exists(os.path.join(dir, user)):
             os.makedirs(os.path.join(dir, user))
         for path in screens:
             file = os.path.basename(path)
-            if not os.path.exists(os.path.join(dir, user, file[:-4]+".0.png")):
-                os.symlink(os.path.join("..", file), os.path.join(dir, user, file[:-4]+".0.png"))
+            if not os.path.exists(os.path.join(dir, user, file)):
+                os.symlink(os.path.join("..", file), os.path.join(dir, user, file))
 
 def main(args):
     if not os.path.exists(args.ranking_dir):

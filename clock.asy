@@ -7,28 +7,29 @@ string to_string(int x) {
 void clock(string date, int h, int m) {
     picture pic;
     label(pic, graphic("screenshots/background.png"), (0,0));
+    clip(pic, (480,270) -- (480,-270) -- (-480,-270) -- (-480,270) -- cycle);
     layer(pic);
-    path c = circle((0,0), 460);
+    path c = circle((0,0), 230);
     picture subpic;
     label(subpic, graphic("screenshots/filler.png"), (0,0));
     clip(subpic, c);
     add(pic, subpic);
     layer(pic);
-    draw(pic, c, black+48);
+    draw(pic, c, black+24);
     for (int i=0; i<60; ++i)
-        dot(pic, 400*dir(6*i), black+16);
+        dot(pic, 200*dir(6*i), black+8);
     for (int i=0; i<12; ++i) {
-        real l = i%3 == 0 ? 64 : 32;
+        real l = i%3 == 0 ? 32 : 16;
         pair p = dir(30*i);
-        draw(pic, (400-l)*p -- 400*p, black+24);
+        draw(pic, (200-l)*p -- 200*p, black+12);
     }
     path hl = (0,0) -- (-5,30) -- (0,60) -- (5,30) -- cycle;
-    fill(pic, rotate(-30*h)*scale(4)*hl, black);
+    fill(pic, rotate(-30*h)*scale(2)*hl, black);
     path ml = (0,0) -- (-5,60) -- (0,90) -- (5,60) -- cycle;
-    fill(pic, rotate(-6*m)*scale(4)*ml, black);
-    fill(pic, circle((0,0), 12), black);
-    fill(pic, circle((0,0), 6), white);
-    shipout("screenshots/" + date + "T" + to_string(h) + ":" + to_string(m) + ":00.0", pic);
+    fill(pic, rotate(-6*m)*scale(2)*ml, black);
+    fill(pic, circle((0,0), 6), black);
+    fill(pic, circle((0,0), 3), white);
+    shipout("screenshots/" + date + "T" + to_string(h) + ":" + to_string(m) + ":00.0.png", pic);
 }
 
 string[] words = split(stdin, " ");
