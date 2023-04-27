@@ -129,7 +129,7 @@ def main(args):
     with open(os.path.join(args.output_dir, "ranking.json"), "w") as f:
         json.dump(ranking, f, indent=4)
 
-    if args.terry:
+    if os.path.exists("./screenshots/background.png") and os.path.exists("./screenshots/filler.png"):
         fake_screenshots("./screenshots", [user["username"] for user in ranking if user["medal"]], config.CONTEST_START, config.CONTEST_END)
 
     logger.info("Resizing faces...")

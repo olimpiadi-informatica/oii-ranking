@@ -2,15 +2,19 @@ from manim import *
 
 class Countdown(Scene):
     def construct(self):
-        for i in reversed(range(61)):
+        print("Insert the starting countdown number:", end= ' ')
+        N = int(input())
+        for i in reversed(range(N + 1)):
             t = Text(("0" if i<10 else "") + str(i), font="OCR A Extended", font_size=144)
             self.play(FadeIn(t, scale=0, run_time=0.5))
             self.play(FadeOut(t, scale=5, run_time=0.5))
 
 class NameMarker(Scene):
     def construct(self):
-        name = "Name Surname"
-        title = "Why are we considering him"
+        print("Insert the full name of the person:", end= ' ')
+        name = input().strip()
+        print("Insert the title of the person:", end= ' ')
+        title = input().strip()
         r = Rectangle(height = 1, width = 8)
         r.set_fill("#C0C0C0", opacity = 0.8)
         r.set_stroke(width = 0)
