@@ -174,7 +174,7 @@ if __name__ == "__main__":
     )
     parser.add_argument(
         "--output-dir",
-        help="wirectory to write the output",
+        help="directory to write the output",
         default="./output/",
     )
     parser.add_argument(
