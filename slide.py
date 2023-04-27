@@ -1,9 +1,10 @@
 import json
 import os.path
+import random
 from datetime import datetime
 from glob import glob
 
-from manimlib.imports import *
+from manim import *
 
 sys.path.append(".")
 
@@ -26,6 +27,7 @@ from config import (
     SCREEN_DIR,
     TIMELAPSE_DURATION,
     WINNER_CONFETTI,
+    WINNER_CONFETTI_DURATION,
 )
 
 with open(os.path.join(PATH_OUTPUT, "history.json")) as f:
@@ -36,11 +38,8 @@ with open(os.path.join(PATH_OUTPUT, "ranking.json")) as f:
 
 
 class Slide(Scene):
-    CONFIG = {
-        "camera_config": {"background_color": BACKGROUND_COLOR},
-    }
-
     def construct(self):
+        self.camera.background_color = BACKGROUND_COLOR
         self.timelapse_dur = TIMELAPSE_DURATION
         self.start_time = datetime.strptime(CONTEST_START, "%Y-%m-%dT%H:%M:%S")
         self.end_time = datetime.strptime(CONTEST_END, "%Y-%m-%dT%H:%M:%S")
@@ -80,7 +79,7 @@ class Slide(Scene):
                 self.cup(self.position)
 
             # name
-            name = TextMobject(user["name"])
+            name = Tex(user["name"])
             name.scale(1.4)
             name.to_corner(UP + LEFT)
 
@@ -88,18 +87,18 @@ class Slide(Scene):
             klass = CLASS[user["class"]]
             school = user["school"]
             city = user["city"]
-            province = " (%s)" % user["province"] if user["province"] else ""
-            sub = TextMobject(f"Classe {klass}, {school}, {city}{province}")
+            province = " (%s)" % user["province"] if user.get("province") else ""
+            sub = Tex(f"Classe {klass}, {school}, {city}{province}")
             sub.scale(0.8)
             sub.next_to(name, DOWN)
-            sub.set_x(name.get_x() - name.get_width() / 2, LEFT)
+            sub.set_x(name.get_x() - name.width / 2, LEFT)
             sub.set_y(name.get_y() - 0.6)
 
             # face
             face_path = os.path.join(FACE_DIR, username + ".jpg")
             if os.path.exists(face_path):
                 img = ImageMobject(face_path)
-                img.set_height(5)
+                img.height = 5
                 # img.set_width(5)
                 img.to_corner(DOWN + LEFT)
             else:
@@ -112,7 +111,7 @@ class Slide(Scene):
             self.play(
                 write_name,
                 Write(sub, run_time=write_name.run_time),
-                FadeInFrom(img, direction=LEFT),
+                FadeIn(img, shift=RIGHT),
             )
 
             # timelapse
@@ -129,22 +128,45 @@ class Slide(Scene):
             self.cur_screen = 0
             self.cur_score = 0
             self.cur_time = 0.0
+            self.cur_datetime = self.start_time
+
             self.screen = self.get_screen(0)
             self.score = self.get_score(0)
+
             self.play(FadeIn(self.screen), FadeIn(self.score), run_time=0.3)
+
+            def screen_updater(screen):
+                if self.find_cur_screen(self.cur_datetime):
+                    screen.become(self.get_screen(self.cur_screen))
+
+            self.screen.add_updater(screen_updater)
+
+            def score_updater(score):
+                if self.find_cur_score(self.cur_datetime):
+                    score.become(self.get_score(self.cur_score))
+
+            self.score.add_updater(score_updater)
 
             # progress bar
             self.progress = Rectangle(
                 height=0.05,
-                width=0.001,
+                width=0.0005,
                 fill_color=WHITE,
                 fill_opacity=1,
                 stroke_width=0,
             )
-            self.progress.set_x(self.screen.get_x() - self.screen.get_width() / 2)
-            self.progress.set_y(
-                self.screen.get_y() - self.screen.get_height() / 2 - 0.05
-            )
+            self.progress.set_x(self.screen.get_x() - self.screen.width / 2)
+            self.progress.set_y(self.screen.get_y() - self.screen.height / 2 - 0.05)
+
+            def progressbar_updater(bar):
+                now_perc = self.cur_time / self.timelapse_dur
+                bar.stretch_to_fit_width(
+                    self.screen.width * max(0.0001, min(now_perc, 1))
+                )
+                bar.set_x(self.screen.get_x() - self.screen.width / 2 + bar.width / 2)
+                bar.set_y(self.screen.get_y() - self.screen.height / 2 - 0.05)
+
+            self.progress.add_updater(progressbar_updater)
             self.add(self.progress)
             self.cur_time = 0.0
 
@@ -156,16 +178,15 @@ class Slide(Scene):
             self.always_update_mobjects = False
 
             # make sure the final score is shown
-            self.remove(self.score)
-            self.score = self.get_score(-1)
-            self.add(self.score)
+            self.score.become(self.get_score(-1))
+            self.screen.become(self.get_screen(-1))
 
             # medal
             medal = ImageMobject(PATH_MEDAL)
-            medal.scale(1.5)
+            medal.scale(0.75)
             medal.set_color(MEDAL_COLORS[user["medal"]])
             medal.move_to([2, 0, 0])  # TODO: fix medal Y position
-            position = TextMobject(r"\textbf{%d}" % self.position)
+            position = Tex(r"\textbf{%d}" % self.position)
             position.scale(2)
             position.move_to(medal)
             position.set_color(BLACK)
@@ -182,8 +203,8 @@ class Slide(Scene):
                 LaggedStart(
                     AnimationGroup(
                         *confetti_anim,
-                        FadeInFromLarge(medal),
-                        FadeInFromLarge(position),
+                        FadeIn(medal, scale=2),
+                        FadeIn(position, scale=2),
                     )
                 ),
             )
@@ -192,21 +213,21 @@ class Slide(Scene):
             po = Circle(stroke_color=WHITE)
             po.scale(0.5)
             po.next_to(medal)
-            po_text = TextMobject("PO")
+            po_text = Tex("PO")
             po_text.move_to(po)
             if user["po"]:
                 self.play(
-                    ShowCreation(po),
+                    Create(po),
                     Write(po_text),
                 )
 
             # winner confetti
+            confetti = []
             if WINNER_CONFETTI and self.position == 1:
-                self.wait(1)
-                confetti_anim = get_confetti_animations(150)
-                confetti_spirils = list(map(turn_animation_into_updater, confetti_anim))
-                self.add(*confetti_spirils)
-                self.wait(15)
+                # self.wait(1)
+                confetti = get_confetti_animations(150)
+                self.add(*confetti)
+                self.wait(WINNER_CONFETTI_DURATION)
             else:
                 self.wait(MEDAL_DELAY[user["medal"]])
 
@@ -219,6 +240,7 @@ class Slide(Scene):
                 FadeOut(medal),
                 FadeOut(position),
             ]
+            fade_outs += [FadeOut(c) for c in confetti]
             if user["po"]:
                 fade_outs += [
                     FadeOut(po),
@@ -229,16 +251,16 @@ class Slide(Scene):
 
     def get_screen(self, index):
         screen = ImageMobject(self.screenshots[index][1])
-        screen.set_height(3)
+        screen.height = 3
         screen.to_corner(DOWN + RIGHT)
         return screen
 
     def get_score(self, index):
         points = int(self.history[index]["score"])
-        score = TextMobject(f"{points} / {MAX_SCORE}")
+        score = Tex(f"{points} / {MAX_SCORE}")
         score.scale(1.2)
         score.next_to(self.screen, UP + RIGHT)
-        score.set_x(self.screen.get_x() + self.screen.get_width() / 2, RIGHT)
+        score.set_x(self.screen.get_x() + self.screen.width / 2, RIGHT)
         return score
 
     def find_cur_screen(self, now):
@@ -268,114 +290,87 @@ class Slide(Scene):
         if self.timelapse:
             self.cur_time += dt
             now_perc = self.cur_time / self.timelapse_dur
-            now_time = self.start_time + (self.end_time - self.start_time) * now_perc
-            self.progress.set_width(
-                self.screen.get_width() * max(0.0001, min(now_perc, 1)),
-                stretch=True,
-                about_edge=LEFT,
+            self.cur_datetime = (
+                self.start_time + (self.end_time - self.start_time) * now_perc
             )
-            self.progress.set_x(
-                self.screen.get_x()
-                - self.screen.get_width() / 2
-                + self.progress.get_width() / 2
-            )
-            self.progress.set_y(
-                self.screen.get_y() - self.screen.get_height() / 2 - 0.05
-            )
-            # search the current screenshot
-            if self.find_cur_screen(now_time):
-                self.remove(self.screen)
-                screen = self.get_screen(self.cur_screen)
-                self.add(screen)
-                self.screen = screen
-            if self.find_cur_score(now_time):
-                score = self.get_score(self.cur_score)
-                self.remove(self.score)
-                self.add(score)
-                self.score = score
 
     def cup(self, pos_num):
         cup = SVGMobject(PATH_CUP)
         cup.scale(2)
         cup.set_color(MEDAL_COLORS["gold"])
 
-        pos = TextMobject(str(pos_num), background_stroke_width=0)
+        pos = Tex(str(pos_num), background_stroke_width=0)
         pos.set_color(BACKGROUND_COLOR)
         pos.scale(3)
         pos.shift(1.3 * UP)
 
         self.play(Write(cup, run_time=2), Write(pos, run_time=0.001))
         self.wait(2)
-        self.play(FadeOutAndShift(cup), FadeOutAndShift(pos))
+        self.play(FadeOut(cup, shift=DOWN), FadeOut(pos, shift=DOWN))
 
 
-class ConfettiSpiril(Animation):
-    CONFIG = {
-        "x_start": 0,
-        "spiril_radius": 0.5,
-        "num_spirils": 4,
-        "run_time": 15,
-        "rate_func": None,
-    }
+def make_falling_confetti_mobject(x_start, start_delay, duration):
+    colors = [RED, YELLOW, GREEN, BLUE, PURPLE, RED]
+    square = Square(
+        side_length=0.2,
+        stroke_width=0,
+        fill_opacity=0.75,
+        fill_color=random.choice(colors),
+    )
+    square.next_to(x_start * RIGHT + config.frame_y_radius * UP, UP)
 
-    def __init__(self, mobject, **kwargs):
-        digest_config(self, kwargs)
-        mobject.next_to(self.x_start * RIGHT + FRAME_Y_RADIUS * UP, UP)
-        self.total_vert_shift = FRAME_HEIGHT + mobject.get_height() + 2 * MED_SMALL_BUFF
+    time = 0
+    turns = 2 * random.random()
+    turn_width = 0.03 * random.random()
 
-        Animation.__init__(self, mobject, **kwargs)
+    def update(square, dt):
+        nonlocal time
+        time += dt
 
-    def interpolate_submobject(self, submobject, starting_submobject, alpha):
-        submobject.points = np.array(starting_submobject.points)
+        if time < start_delay:
+            return
 
-    def interpolate_mobject(self, alpha):
-        Animation.interpolate_mobject(self, alpha)
-        angle = alpha * self.num_spirils * 2 * np.pi
-        vert_shift = alpha * self.total_vert_shift
+        t = (time - start_delay) / duration
+        x = square.get_x() + turn_width * np.cos(turns * t * TAU)
+        y = config.frame_y_radius - config.frame_height * t
+        angle = 2 * np.pi * dt
+        square.rotate(angle, axis=UP, about_point=square.get_center())
+        square.move_to(x * RIGHT + y * UP)
 
-        start_center = self.mobject.get_center()
-        self.mobject.shift(self.spiril_radius * OUT)
-        self.mobject.rotate(angle, axis=UP, about_point=start_center)
-        self.mobject.shift(vert_shift * DOWN)
-        if alpha > 0.85:
-            self.mobject.fade(1 - (1 - alpha) / (1 - 0.85))
+        if time > start_delay + duration * 0.85 and t <= 1:
+            square.fade(1 - (1 - t) / (1 - 0.85))
+
+    square.add_updater(update)
+    return square
 
 
 def get_confetti_animations(num_confetti_squares):
-    colors = [RED, YELLOW, GREEN, BLUE, PURPLE, RED]
-    confetti_squares = [
-        Square(
-            side_length=0.2,
-            stroke_width=0,
-            fill_opacity=0.75,
-            fill_color=random.choice(colors),
+    confetti = [
+        make_falling_confetti_mobject(
+            config.frame_width * random.random() - config.frame_x_radius,
+            start_delay=a,
+            duration=5,
         )
-        for x in range(num_confetti_squares)
+        for a in np.linspace(0, WINNER_CONFETTI_DURATION, num_confetti_squares)
     ]
-    confetti_spirils = [
-        ConfettiSpiril(
-            square,
-            x_start=2 * random.random() * FRAME_X_RADIUS - FRAME_X_RADIUS,
-            rate_func=squish_rate_func(lambda t: t, a, a + 0.5),
-        )
-        for a, square in zip(np.linspace(0, 1, num_confetti_squares), confetti_squares)
-    ]
-    return confetti_spirils
+    return confetti
 
 
 class ConfettiBoom(Animation):
-    CONFIG = {
-        "x_start": 0,
-        "y_start": 0,
-        "direction": 0,
-        "speed": 2,
-        "spiril_radius": 0.5,
-        "num_spirils": 2,
-        "run_time": 1.5,
-    }
-
     def __init__(self, mobject, **kwargs):
-        digest_config(self, kwargs)
+        d = {
+            "x_start": 0,
+            "y_start": 0,
+            "direction": 0,
+            "speed": 2,
+            "spiril_radius": 0.5,
+            "num_spirils": 2,
+            "run_time": 1.5,
+        }
+        d.update(kwargs)
+        for k, v in d.items():
+            setattr(self, k, v)
+        Animation.__init__(self, mobject, **d)
         self.direction_v = np.array([np.cos(self.direction), np.sin(self.direction), 0])
         self.phase = random.random() * 2 * np.pi
         mobject.shift(np.array([self.x_start, self.y_start, 0]))
