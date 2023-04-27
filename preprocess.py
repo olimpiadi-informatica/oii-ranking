@@ -122,7 +122,7 @@ def main(args):
         reader = csv.DictReader(f)
         ranking = list(reader)
         for user in ranking:
-            user["po"] = user["po"] != "" and user["po"] != "F"
+            user["po"] = "po" in user and user["po"] != "" and user["po"] != "F"
             user["position"] = int(user["position"])
             user["class"] = int(user["class"])
 
