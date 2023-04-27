@@ -16,7 +16,7 @@ Instructions on how to build the videos for the ranking of the OII.
 
 ```
 mkvirtualenv manim
-pip install manimlib
+pip install manim
 ```
 
 #### Preprocess data
@@ -32,8 +32,8 @@ Now inside of `./output` there is some preprocessed data. In particular, the ima
 Put your settings in `./config.py` and run one of the following commands to render the video:
 
 ```
-manim ./slide.py Slide -l              # preview quality
-manim ./slide.py Slide --high-quality  # final render
+manim render -ql ./slide.py Slide  # preview quality
+manim render -qh ./slide.py Slide  # final render
 ```
 
 The rendered video is stored at `./media/videos/slide/`.
