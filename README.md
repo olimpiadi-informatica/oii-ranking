@@ -6,7 +6,7 @@ Instructions on how to build the videos for the ranking of the OII.
 
 - Python3 + manim + manim's dependencies
 - A ranking file `./ranking.csv` with columns: `position`, `username`, `name`, `school`, `city`, `province`, `medal`, `class`, `po`. If the `po` column is missing, no participant will be considered a PO.
-- A folder with the cmsRankingWebServer or terry data (`./ranking/`)
+- A folder with the cmsRankingWebServer or terry or quizms data (`./ranking/`)
 - A folder with all the faces (`./faces/username.jpg`)
 - A folder with all the screenshots (`./screenshots/username/date.png`). If screenshots are missing, you can auto-generate placeholders if files `./screenshots/background.png` and `./screenshots/filler.png` are given. Auto-generation requires several minutes and will not be performed if files matching pattern `20*00.0.png` are already found in `./screenshots/`.
 
@@ -27,7 +27,7 @@ For cms data:
 ./preprocess.py
 ```
 
-For terry data:
+For terry and/or quizms data:
 
 ```
 ./preprocess.py -t

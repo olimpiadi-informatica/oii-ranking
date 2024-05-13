@@ -20,7 +20,7 @@ class NameMarker(Scene):
         r.set_stroke(width = 0)
         r.to_edge(RIGHT, buff=0)
         r.to_edge(DOWN, buff=0.5)
-        n = Text(name, font="Futura", font_size=36, color=BLACK)
+        n = Text(name, font="Futura", font_size=36 if len(name) < 33 else 32, color=BLACK)
         t = Text(title, font="Futura", font_size=24, color=BLACK)
         g = VGroup()
         g.add(n)

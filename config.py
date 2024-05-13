@@ -1,13 +1,13 @@
 #!/usr/bin/env python3
 
 # Contest information
-CONTEST_START = "2023-04-18T14:00:00"
-CONTEST_END = "2023-04-18T17:00:01"
+CONTEST_START = "2024-04-23T14:00:00"
+CONTEST_END = "2024-04-23T17:00:01"
 MAX_SCORE = 200
 WINNER_CONFETTI = True
 
 # Debugging
-NUM_USERS = 1
+NUM_USERS = 100
 MEDAL = "gold"
 
 # Data on disk
@@ -29,7 +29,7 @@ BACKGROUND_COLOR = "#222222"
 MEDAL_DELAY = {
     "gold": 5,
     "silver": 3,
-    "bronze": 3,
+    "bronze": 2,
 }
 CLASS = {
     1: "I",

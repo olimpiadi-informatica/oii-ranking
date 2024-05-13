@@ -56,6 +56,34 @@ def get_terry_data(dir: str):
             "score" : score,
             "extra" : [score],
         })
+    qmsfile = os.path.join(dir, "submissions.json")
+    if os.path.exists(qmsfile):
+        with open("ranking.csv") as f:
+            usernames = {row['name']: row['username'] for row in csv.DictReader(f)}
+        with open(qmsfile, "r") as f:
+            for data in json.load(f).values():
+                user = data['name'].title() + ' ' + data['surname'].title()
+                if user not in usernames:
+                    user = data['surname'].title() + ' ' + data['name'].title()
+                    if user not in usernames:
+                        continue
+                user = usernames[user]
+                for i, s in enumerate(data['submissions']):
+                    sub = data['uid'] + '-' + str(i)
+                    date = s['timestamp']
+                    date = int(datetime.strptime(date[:-5], "%Y-%m-%dT%H:%M:%S").timestamp()) + 7200
+                    score = s['score']
+                    submissions[sub] = {
+                        "user" : user,
+                        "task" : "quizms",
+                        "time" : date,
+                    }
+                    subchanges.append({
+                        "submission" : sub,
+                        "time" : date,
+                        "score" : score,
+                        "extra" : [score],
+                    })
     return submissions, subchanges
 
 def fake_screenshots(dir: str, usernames, start, end):
