@@ -44,9 +44,16 @@ manim render -ql ./slide.py Slide  # preview quality
 manim render -qh ./slide.py Slide  # final render
 ```
 
+If you want to render a medal in mention-style, without showing scores and positions (and with multiple faces per page), you run the following similar command:
+
+```
+manim render -ql ./mention.py Mention  # preview quality
+manim render -qh ./mention.py Mention  # final render
+```
+
 The rendered video is stored at `./media/videos/slide/`.
 
-> Note that this will render _only_ the contestants with the medal specified in `config.py`. You will need to update and run the above commands three times, one for each medal color.
+> Note that this will render _only_ the contestants with the medal specified in `config.py`. You will need to update and run the above commands three (or four) times, one for each medal color. In `config.py` you also specify the array configuration for mentions (property `MENTION_ARRAY`).
 
 #### Render overlays
 

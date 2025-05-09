@@ -62,12 +62,15 @@ def get_terry_data(dir: str):
             usernames = {row['name']: row['username'] for row in csv.DictReader(f)}
         with open(qmsfile, "r") as f:
             for data in json.load(f).values():
-                user = data['name'].title() + ' ' + data['surname'].title()
-                if user not in usernames:
-                    user = data['surname'].title() + ' ' + data['name'].title()
+                if data['uid'] in usernames.values():
+                    user = data['uid']
+                else:
+                    user = data['name'].title() + ' ' + data['surname'].title()
                     if user not in usernames:
-                        continue
-                user = usernames[user]
+                        user = data['surname'].title() + ' ' + data['name'].title()
+                        if user not in usernames:
+                            continue
+                    user = usernames[user]
                 for i, s in enumerate(data['submissions']):
                     sub = data['uid'] + '-' + str(i)
                     date = s['timestamp']
@@ -85,6 +88,30 @@ def get_terry_data(dir: str):
                         "extra" : [score],
                     })
     return submissions, subchanges
+
+# Create fake submission.json from ranking
+def fake_subs(dir: str, tasks: list):
+    def ts2dt(s):
+        sec, min = s%60, s//60
+        min, hour = min%60, min//60
+        return "2024-04-23T%d:%02d:%02d.000Z" % (hour+12, min, sec)
+
+    data = {}
+    with open("ranking.csv") as f:
+        for row in csv.DictReader(f):
+            if row['position'] == '':
+                continue
+            subs = []
+            pt = 0
+            for i in range(4):
+                p = int(row[tasks[i]])
+                subs += [{'timestamp': ts2dt(2700*i+54*x), 'score': pt+x} for x in range(0,p+1)]
+                pt += p
+            subs.append({'timestamp': ts2dt(10800), 'score': int(row['score'])})
+            data[row['username']] = {'uid': row['username'], 'submissions': subs}
+
+    with open(os.path.join(dir, "submissions.json"), 'w') as f:
+        json.dump(data, f)
 
 def fake_screenshots(dir: str, usernames, start, end):
     screens = glob.glob(os.path.join(dir, "20*00.0.png"))

@@ -7,7 +7,7 @@ MAX_SCORE = 200
 WINNER_CONFETTI = True
 
 # Debugging
-NUM_USERS = 100
+NUM_USERS = 150
 MEDAL = "gold"
 
 # Data on disk
@@ -27,9 +27,9 @@ MEDAL_COLORS = {
 }
 BACKGROUND_COLOR = "#222222"
 MEDAL_DELAY = {
-    "gold": 5,
-    "silver": 3,
-    "bronze": 2,
+    "gold": 4,
+    "silver": 2,
+    "bronze": 0.5,
 }
 CLASS = {
     1: "I",
@@ -41,5 +41,6 @@ CLASS = {
     7: "II",
     8: "III",
 }
-TIMELAPSE_DURATION = 3
+TIMELAPSE_DURATION = 2
 WINNER_CONFETTI_DURATION = 10
+MENTION_ARRAY = (2,5)
