@@ -99,13 +99,25 @@ class Mention(Scene):
             sub.set_x(name.get_x(LEFT), LEFT)
             sub.set_y((name.get_y(DOWN) + subsub.get_y(UP))/2)
 
+            # po
+            po = Circle(stroke_color=WHITE)
+            po.scale(0.5)
+            po.next_to(name)
+            po_text = Tex("PO")
+            po_text.move_to(po)
+            if user["po"]:
+                self.play(
+                    Create(po),
+                    Write(po_text),
+                )
+
             # Fade out
             fade_list.append([
                 FadeOut(name),
                 FadeOut(sub),
                 FadeOut(subsub),
                 FadeOut(img),
-            ])
+            ] + ([FadeOut(po)] if user["po"] else []))
             fade_outs = []
             if len(fade_list) >= BUNCH:
                 fade_outs = fade_list[0]
