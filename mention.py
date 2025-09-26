@@ -28,7 +28,7 @@ from config import (
     PATH_LOGO,
     PATH_MEDAL,
     PATH_NO_FACE,
-    PATH_OUTPUT,
+    OUTPUT_DIR,
     SCREEN_DIR,
     TIMELAPSE_DURATION,
     WINNER_CONFETTI,
@@ -36,7 +36,7 @@ from config import (
     MENTION_ARRAY,
 )
 
-with open(os.path.join(PATH_OUTPUT, "ranking.json")) as f:
+with open(os.path.join(OUTPUT_DIR, "ranking.json")) as f:
     ranking = json.load(f)
 
 

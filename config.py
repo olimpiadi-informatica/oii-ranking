@@ -11,13 +11,14 @@ NUM_USERS = 150
 MEDAL = "gold"
 
 # Data on disk
-PATH_LOGO = "./noface.png"
-PATH_CUP = "./cup.svg"
-PATH_OUTPUT = "./output"
-SCREEN_DIR = "./screenshots"
-FACE_DIR = PATH_OUTPUT + "/faces"
-PATH_MEDAL = "./medal.png"
-PATH_NO_FACE = "./noface.png"
+OUTPUT_DIR = "output"
+SCREEN_DIR = "screenshots"
+FACE_DIR = OUTPUT_DIR + "/faces"
+PATH_LOGO = "images/logo.png"
+PATH_CUP = "images/cup.svg"
+PATH_MEDAL = "images/medal.png"
+PATH_NO_FACE = "images/noface.jpg"
+PATH_NO_SCREEN = "images/circuits.png"
 
 # Customizations
 MEDAL_COLORS = {
@@ -27,8 +28,8 @@ MEDAL_COLORS = {
 }
 BACKGROUND_COLOR = "#222222"
 MEDAL_DELAY = {
-    "gold": 4,
-    "silver": 2,
+    "gold": 2,
+    "silver": 1,
     "bronze": 0.5,
 }
 CLASS = {
@@ -41,6 +42,6 @@ CLASS = {
     7: "II",
     8: "III",
 }
-TIMELAPSE_DURATION = 2
+TIMELAPSE_DURATION = 3
 WINNER_CONFETTI_DURATION = 10
 MENTION_ARRAY = (2,5)

@@ -1,5 +1,6 @@
 import sys
 import json
+import math
 import os.path
 import random
 from datetime import datetime
@@ -14,7 +15,6 @@ from config import (
     CLASS,
     CONTEST_END,
     CONTEST_START,
-    FACE_DIR,
     MAX_SCORE,
     MEDAL,
     MEDAL_COLORS,
@@ -24,17 +24,19 @@ from config import (
     PATH_LOGO,
     PATH_MEDAL,
     PATH_NO_FACE,
-    PATH_OUTPUT,
+    PATH_NO_SCREEN,
+    FACE_DIR,
+    OUTPUT_DIR,
     SCREEN_DIR,
     TIMELAPSE_DURATION,
     WINNER_CONFETTI,
     WINNER_CONFETTI_DURATION,
 )
 
-with open(os.path.join(PATH_OUTPUT, "history.json")) as f:
+with open(os.path.join(OUTPUT_DIR, "history.json")) as f:
     history = json.load(f)
 
-with open(os.path.join(PATH_OUTPUT, "ranking.json")) as f:
+with open(os.path.join(OUTPUT_DIR, "ranking.json")) as f:
     ranking = json.load(f)
 
 
@@ -56,11 +58,6 @@ class Slide(Scene):
         else:
             num_users = len(ranking)
         users = list(reversed(ranking[:num_users]))
-
-        for user in users:
-            username = user["username"]
-            if not os.path.exists(os.path.join(SCREEN_DIR, username)):
-                raise RuntimeError(f"{username} does not have the screenshot dir")
 
         for user in users:
             # skip other medals
@@ -99,12 +96,11 @@ class Slide(Scene):
             face_path = os.path.join(FACE_DIR, username + ".jpg")
             if os.path.exists(face_path):
                 img = ImageMobject(face_path)
-                img.height = 5
-                # img.set_width(5)
-                img.to_corner(DOWN + LEFT)
             else:
                 print(f"!!! Face of {username} at {face_path} not found")
                 img = ImageMobject(PATH_NO_FACE)
+            img.height = 5
+            img.to_corner(DOWN + LEFT)
 
             # fade in the name and the picture
             self.wait(1)
@@ -126,6 +122,8 @@ class Slide(Scene):
                 if when < self.start_time or when > self.end_time:
                     continue
                 self.screenshots.append((when, screen))
+            if len(self.screenshots) == 0:
+                print(f"!!! Screenshots of {username} at {self.screen_dir} not found")
             self.cur_screen = 0
             self.cur_score = 0
             self.cur_time = 0.0
@@ -187,15 +185,18 @@ class Slide(Scene):
             medal.scale(0.75)
             medal.set_color(MEDAL_COLORS[user["medal"]])
             medal.move_to([2, 0, 0])  # TODO: fix medal Y position
-            position = Tex(r"\textbf{%d}" % self.position)
-            position.scale(2)
-            position.move_to(medal)
-            position.set_color(BLACK)
 
             # confetti boom
             confetti_anim = get_confetti_boom_animations(
-                position.get_x(), position.get_y(), 50
+                medal.get_x(), medal.get_y(), 50
             )
+            position_anim = [FadeIn(medal, scale=2)]
+            if not math.isinf(self.position):
+                position = Tex(r"\textbf{%d}" % self.position)
+                position.scale(2)
+                position.move_to(medal)
+                position.set_color(BLACK)
+                position_anim.append(FadeIn(position, scale=2))
 
             self.play(
                 ApplyMethod(self.score.to_corner, DOWN + RIGHT),
@@ -204,8 +205,7 @@ class Slide(Scene):
                 LaggedStart(
                     AnimationGroup(
                         *confetti_anim,
-                        FadeIn(medal, scale=2),
-                        FadeIn(position, scale=2),
+                        *position_anim,
                     )
                 ),
             )
@@ -239,8 +239,9 @@ class Slide(Scene):
                 FadeOut(img),
                 FadeOut(self.score),
                 FadeOut(medal),
-                FadeOut(position),
             ]
+            if not math.isinf(self.position):
+                fade_outs.append(FadeOut(position))
             fade_outs += [FadeOut(c) for c in confetti]
             if user["po"]:
                 fade_outs += [
@@ -251,7 +252,7 @@ class Slide(Scene):
         self.play(FadeOut(logo))
 
     def get_screen(self, index):
-        screen = ImageMobject(self.screenshots[index][1])
+        screen = ImageMobject(self.screenshots[index][1] if len(self.screenshots) else PATH_NO_SCREEN)
         screen.height = 3
         screen.to_corner(DOWN + RIGHT)
         return screen

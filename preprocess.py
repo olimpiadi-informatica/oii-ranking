@@ -163,7 +163,8 @@ def main(args):
 
         history = user_score_history.setdefault(username, [])
         score = sum(sum(subtasks) for subtasks in user.values())
-        history.append(dict(time=time, score=score))
+        if score != (history[-1]['score'] if len(history) else 0):
+            history.append(dict(time=time, score=score))
 
     logger.info("%s users have submitted", len(user_task_score))
 
@@ -178,7 +179,7 @@ def main(args):
         ranking = list(reader)
         for user in ranking:
             user["po"] = "po" in user and user["po"] != "" and user["po"] != "F"
-            user["position"] = int(user["position"])
+            user["position"] = int(user["position"]) if user["position"] else float("inf")
             user["class"] = int(user["class"])
 
     with open(os.path.join(args.output_dir, "ranking.json"), "w") as f:
