@@ -44,8 +44,8 @@ class Slide(Scene):
     def construct(self):
         self.camera.background_color = BACKGROUND_COLOR
         self.timelapse_dur = TIMELAPSE_DURATION
-        self.start_time = datetime.strptime(CONTEST_START, "%Y-%m-%dT%H:%M:%S")
-        self.end_time = datetime.strptime(CONTEST_END, "%Y-%m-%dT%H:%M:%S")
+        self.start_time = [datetime.strptime(s, "%Y-%m-%dT%H:%M:%S") for s in CONTEST_START]
+        self.end_time = [datetime.strptime(e, "%Y-%m-%dT%H:%M:%S") for e in CONTEST_END]
         self.timelapse = False
 
         logo = ImageMobject(PATH_LOGO)
@@ -119,15 +119,16 @@ class Slide(Scene):
                     when = datetime.strptime(when, "%Y-%m-%dT%H:%M:%S.%f")
                 except ValueError:
                     continue
-                if when < self.start_time or when > self.end_time:
-                    continue
-                self.screenshots.append((when, screen))
+                for s,e in zip(self.start_time, self.end_time):
+                    if when >= s and when <= e:
+                        self.screenshots.append((when, screen))
+                        break
             if len(self.screenshots) == 0:
                 print(f"!!! Screenshots of {username} at {self.screen_dir} not found")
             self.cur_screen = 0
             self.cur_score = 0
             self.cur_time = 0.0
-            self.cur_datetime = self.start_time
+            self.cur_datetime = self.start_time[0]
 
             self.screen = self.get_screen(0)
             self.score = self.get_score(0)
@@ -267,23 +268,21 @@ class Slide(Scene):
 
     def find_cur_screen(self, now):
         changed = False
-        for i in range(self.cur_screen, len(self.screenshots)):
-            time, path = self.screenshots[i]
-            if time >= now:
-                if i != self.cur_screen:
-                    changed = True
-                self.cur_screen = i
+        while self.cur_screen+1 < len(self.screenshots):
+            if self.screenshots[self.cur_screen+1][0] <= now.timestamp():
+                self.cur_screen += 1
+                changed = True
+            else:
                 break
         return changed
 
     def find_cur_score(self, now: datetime):
         changed = False
-        for i in range(self.cur_score, len(self.history)):
-            time = self.history[i]["time"]
-            if time >= now.timestamp():
-                if i != self.cur_score:
-                    changed = True
-                self.cur_score = i
+        while self.cur_score+1 < len(self.history):
+            if self.history[self.cur_score+1]["time"] <= now.timestamp():
+                self.cur_score += 1
+                changed = True
+            else:
                 break
         return changed
 
@@ -292,8 +291,10 @@ class Slide(Scene):
         if self.timelapse:
             self.cur_time += dt
             now_perc = self.cur_time / self.timelapse_dur
+            i = min(int(now_perc * len(self.start_time)), len(self.start_time)-1)
+            now_perc -= i / len(self.start_time)
             self.cur_datetime = (
-                self.start_time + (self.end_time - self.start_time) * now_perc
+                self.start_time[i] + (self.end_time[i] - self.start_time[i]) * now_perc
             )
 
     def cup(self, pos_num):
