@@ -229,7 +229,7 @@ class Medal(Scene):
                     continue
                 for s,e in zip(self.start_time, self.end_time):
                     if when >= s and when <= e:
-                        self.screenshots.append((when, screen))
+                        self.screenshots.append((when.timestamp(), screen))
                         break
             if len(self.screenshots) == 0:
                 print(f"!!! Screenshots of {username} at {self.screen_dir} not found")
