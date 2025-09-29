@@ -5,10 +5,10 @@ Instructions on how to build the videos for the ranking of the OII.
 ## Requirements
 
 - Python3 + manim + manim's dependencies
-- A ranking file `./ranking.csv` with columns: `position`, `username`, `name`, `school`, `city`, `province`, `medal`, `class`, `po`. If the `po` column is missing, no participant will be considered a PO.
-- A folder with the cmsRankingWebServer or terry or quizms data (`./ranking/`)
-- A folder with all the faces (`./faces/username.jpg`)
-- A folder with all the screenshots (`./screenshots/username/date.png`). If screenshots are missing, you can auto-generate placeholders if files `./screenshots/background.png` and `./screenshots/filler.png` are given. Auto-generation requires several minutes and will not be performed if files matching pattern `20*00.0.png` are already found in `./screenshots/`.
+- A ranking file `./ranking.csv` with columns: `position`, `username`, `name`, `school`, `city`, `province`, `medal`, `class`, `po`. If the `po` column is missing, no participant will be considered a PO. Position can be empy for unofficial contestants.
+- A folder with the cmsRankingWebServer or terry or quizms data (`./ranking/`, mandatory).
+- A folder with all the faces (`./faces/username.jpg`). Missing faces are substituted with a placeholder.
+- A folder with all the screenshots (`./screenshots/username/date.png`). If screenshots for a user are missing, a placeholder is used instead. If all screenshots are missing, you can auto-generate placeholders if files `./screenshots/background.png` and `./screenshots/filler.png` are given. Auto-generation requires several minutes and will not be performed if files matching pattern `20*00.0.png` are already found in `./screenshots/`. 
 
 ## Instructions
 
@@ -37,23 +37,18 @@ Now inside of `./output` there is some preprocessed data. In particular, the ima
 
 #### Render a medal
 
-Put your settings in `./config.py` and run one of the following commands to render the video:
+Update the settings in `./config.py` and run one of the following commands to render the video:
 
 ```
-manim render -ql ./slide.py Slide  # preview quality
-manim render -qh ./slide.py Slide  # final render
+manim render -ql ./ranking.py <Medal>  # preview quality
+manim render -qh ./ranking.py <Medal>  # final render
 ```
 
-If you want to render a medal in mention-style, without showing scores and positions (and with multiple faces per page), you run the following similar command:
-
-```
-manim render -ql ./mention.py Mention  # preview quality
-manim render -qh ./mention.py Mention  # final render
-```
+Medal can be Gold, Silver, Bronze or Mention (case-sensitive).
 
 The rendered video is stored at `./media/videos/slide/`.
 
-> Note that this will render _only_ the contestants with the medal specified in `config.py`. You will need to update and run the above commands three (or four) times, one for each medal color. In `config.py` you also specify the array configuration for mentions (property `MENTION_ARRAY`).
+In `config.py` you can specify many other properties, including the array configuration for mentions (property `MENTION_ARRAY`).
 
 #### Render overlays
 

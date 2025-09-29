@@ -7,8 +7,7 @@ MAX_SCORE = 400
 WINNER_CONFETTI = True
 
 # Debugging
-NUM_USERS = 150
-MEDAL = "gold"
+MAX_USERS = 999
 
 # Data on disk
 OUTPUT_DIR = "output"
@@ -21,6 +20,12 @@ PATH_NO_FACE = "images/noface.jpg"
 PATH_NO_SCREEN = "images/circuits.png"
 
 # Customizations
+MEDAL_NAMES = {
+    "gold": ["gold", "oro"],
+    "silver": ["silver", "argento"],
+    "bronze": ["bronze", "bronzo"],
+    "mention": ["mention", "menzione"]
+}
 MEDAL_COLORS = {
     "gold": "#FFD700",
     "silver": "#C0C0C0",
@@ -41,6 +46,11 @@ CLASS = {
     6: "I",
     7: "II",
     8: "III",
+    9: "I",
+    10: "II",
+    11: "III",
+    12: "IV",
+    13: "V",
 }
 TIMELAPSE_DURATION = 4
 WINNER_CONFETTI_DURATION = 10

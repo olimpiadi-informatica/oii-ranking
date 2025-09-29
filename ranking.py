@@ -1,37 +1,19 @@
 import sys
 import json
-import math
 import os.path
-import random
 from datetime import datetime
 from glob import glob
 
 from manim import *
 
+WIDTH, HEIGHT = config.frame_x_radius, config.frame_y_radius
+WIDTH -= 0.5
+HEIGHT -= 0.5
+
 sys.path.append(".")
 
-from config import (
-    BACKGROUND_COLOR,
-    CLASS,
-    CONTEST_END,
-    CONTEST_START,
-    MAX_SCORE,
-    MEDAL,
-    MEDAL_COLORS,
-    MEDAL_DELAY,
-    NUM_USERS,
-    PATH_CUP,
-    PATH_LOGO,
-    PATH_MEDAL,
-    PATH_NO_FACE,
-    PATH_NO_SCREEN,
-    FACE_DIR,
-    OUTPUT_DIR,
-    SCREEN_DIR,
-    TIMELAPSE_DURATION,
-    WINNER_CONFETTI,
-    WINNER_CONFETTI_DURATION,
-)
+from config import *
+from confetti import *
 
 with open(os.path.join(OUTPUT_DIR, "history.json")) as f:
     history = json.load(f)
@@ -39,8 +21,13 @@ with open(os.path.join(OUTPUT_DIR, "history.json")) as f:
 with open(os.path.join(OUTPUT_DIR, "ranking.json")) as f:
     ranking = json.load(f)
 
+MEDAL = sys.argv[4].lower()
+ranking = [u for u in reversed(ranking) if u["medal"].lower() in MEDAL_NAMES[MEDAL]][-MAX_USERS:]
 
-class Slide(Scene):
+print('Rendering ranking of %d students with medal "%s"...\n' % (len(ranking), MEDAL))
+
+
+class Medal(Scene):
     def construct(self):
         self.camera.background_color = BACKGROUND_COLOR
         self.timelapse_dur = TIMELAPSE_DURATION
@@ -53,17 +40,7 @@ class Slide(Scene):
         logo.to_corner(UP + RIGHT)
         self.add(logo)
 
-        if NUM_USERS is not None:
-            num_users = NUM_USERS
-        else:
-            num_users = len(ranking)
-        users = list(reversed(ranking[:num_users]))
-
-        for user in users:
-            # skip other medals
-            if user["medal"] != MEDAL:
-                continue
-
+        for user in ranking:
             username = user["username"]
             self.position = user["position"]
             print(f"====== Processing {username} ({self.position}) ========")
@@ -192,7 +169,7 @@ class Slide(Scene):
                 medal.get_x(), medal.get_y(), 50
             )
             position_anim = [FadeIn(medal, scale=2)]
-            if not math.isinf(self.position):
+            if self.position != float("inf"):
                 position = Tex(r"\textbf{%d}" % self.position)
                 position.scale(2)
                 position.move_to(medal)
@@ -241,7 +218,7 @@ class Slide(Scene):
                 FadeOut(self.score),
                 FadeOut(medal),
             ]
-            if not math.isinf(self.position):
+            if self.position != float("inf"):
                 fade_outs.append(FadeOut(position))
             fade_outs += [FadeOut(c) for c in confetti]
             if user["po"]:
@@ -312,111 +289,102 @@ class Slide(Scene):
         self.play(FadeOut(cup, shift=DOWN), FadeOut(pos, shift=DOWN))
 
 
-def make_falling_confetti_mobject(x_start, start_delay, duration):
-    colors = [RED, YELLOW, GREEN, BLUE, PURPLE, RED]
-    square = Square(
-        side_length=0.2,
-        stroke_width=0,
-        fill_opacity=0.75,
-        fill_color=random.choice(colors),
-    )
-    square.next_to(x_start * RIGHT + config.frame_y_radius * UP, UP)
+class Gold(Medal):
+    pass
 
-    time = 0
-    turns = 2 * random.random()
-    turn_width = 0.03 * random.random()
+class Silver(Medal):
+    pass
 
-    def update(square, dt):
-        nonlocal time
-        time += dt
+class Bronze(Medal):
+    pass
 
-        if time < start_delay:
-            return
+class Mention(Scene):
+    def construct(self):
+        self.camera.background_color = BACKGROUND_COLOR
 
-        t = (time - start_delay) / duration
-        x = square.get_x() + turn_width * np.cos(turns * t * TAU)
-        y = config.frame_y_radius - config.frame_height * t
-        angle = 2 * np.pi * dt
-        square.rotate(angle, axis=UP, about_point=square.get_center())
-        square.move_to(x * RIGHT + y * UP)
+        ARRX, ARRY = MENTION_ARRAY
+        BUNCH = ARRX * (ARRY-1)
+        fade_list = []
+        for i,user in enumerate(ranking):
+            username = user["username"]
+            print(f"====== Processing {username} ========")
+            x = i % ARRX
+            y = (i//ARRX) % ARRY
 
-        if time > start_delay + duration * 0.85 and t <= 1:
-            square.fade(1 - (1 - t) / (1 - 0.85))
+            scale = 0.7
 
-    square.add_updater(update)
-    return square
+            # face
+            face_path = os.path.join(FACE_DIR, username + ".jpg")
+            if os.path.exists(face_path):
+                img = ImageMobject(face_path)
+            else:
+                print(f"!!! Face of {username} at {face_path} not found")
+                img = ImageMobject(PATH_NO_FACE)
+            img.height = 1.5*scale
+            img.to_corner(DOWN + LEFT)
+            img.set_x(-WIDTH + 2*WIDTH*x/ARRX, LEFT)
+            img.set_y(HEIGHT - 2*HEIGHT*y/ARRY, UP)
 
+            # name
+            name = Tex(user["name"])
+            name.scale(1.4*scale)
+            name.set_x(img.get_x(RIGHT) + 0.2, LEFT)
+            name.set_y(img.get_y(UP), UP)
 
-def get_confetti_animations(num_confetti_squares):
-    confetti = [
-        make_falling_confetti_mobject(
-            config.frame_width * random.random() - config.frame_x_radius,
-            start_delay=a,
-            duration=5,
-        )
-        for a in np.linspace(0, WINNER_CONFETTI_DURATION, num_confetti_squares)
-    ]
-    return confetti
+            # school
+            klass = CLASS[user["class"]]
+            school = user["school"]
+            city = user["city"]
+            province = " (%s)" % user["province"] if user.get("province") else ""
 
+            subsub = Tex(f"{city}{province}")
+            subsub.scale(0.8*scale)
+            subsub.set_x(name.get_x(LEFT), LEFT)
+            subsub.set_y(img.get_y(DOWN), DOWN)
 
-class ConfettiBoom(Animation):
-    def __init__(self, mobject, **kwargs):
-        d = {
-            "x_start": 0,
-            "y_start": 0,
-            "direction": 0,
-            "speed": 2,
-            "spiril_radius": 0.5,
-            "num_spirils": 2,
-            "run_time": 1.5,
-        }
-        d.update(kwargs)
-        for k, v in d.items():
-            setattr(self, k, v)
-        Animation.__init__(self, mobject, **d)
-        self.direction_v = np.array([np.cos(self.direction), np.sin(self.direction), 0])
-        self.phase = random.random() * 2 * np.pi
-        mobject.shift(np.array([self.x_start, self.y_start, 0]))
+            sub = Tex(f"Classe {klass}, {school}")
+            sub.scale(0.8*scale)
+            sub.set_x(name.get_x(LEFT), LEFT)
+            sub.set_y((name.get_y(DOWN) + subsub.get_y(UP))/2)
 
-        Animation.__init__(self, mobject, **kwargs)
+            # po
+            po = Circle(stroke_color=WHITE)
+            po.scale(0.5)
+            po.next_to(name)
+            po_text = Tex("PO")
+            po_text.move_to(po)
+            if user["po"]:
+                self.play(
+                    Create(po),
+                    Write(po_text),
+                )
 
-    def interpolate_submobject(self, submobject, starting_submobject, alpha):
-        submobject.points = np.array(starting_submobject.points)
+            # Fade out
+            fade_list.append([
+                FadeOut(name),
+                FadeOut(sub),
+                FadeOut(subsub),
+                FadeOut(img),
+            ] + ([FadeOut(po)] if user["po"] else []))
+            fade_outs = []
+            if len(fade_list) >= BUNCH:
+                fade_outs = fade_list[0]
+                fade_list = fade_list[1:]
 
-    def interpolate_mobject(self, alpha):
-        Animation.interpolate_mobject(self, alpha)
-
-        angle = alpha * self.num_spirils * 2 * np.pi + self.phase
-        dist = alpha * self.speed
-
-        start_center = self.mobject.get_center()
-        self.mobject.rotate(angle, axis=UP, about_point=start_center)
-        self.mobject.rotate(angle, axis=OUT, about_point=start_center)
-        self.mobject.shift(dist * self.direction_v)
-        if alpha > 0.85:
-            self.mobject.fade(1 - (1 - alpha) / (1 - 0.85))
-
-
-def get_confetti_boom_animations(x_start, y_start, num_confetti_squares):
-    colors = [RED, YELLOW, GREEN, BLUE, PURPLE, RED]
-    confetti_squares = [
-        Square(
-            side_length=0.2,
-            stroke_width=0,
-            fill_opacity=0.75,
-            fill_color=random.choice(colors),
-        )
-        for x in range(num_confetti_squares)
-    ]
-    confetti_spirils = [
-        ConfettiBoom(
-            square,
-            x_start=x_start,
-            y_start=y_start,
-            direction=random.random() * 2 * np.pi,
-            speed=random.random() * 3,
-            rate_func=lambda t: rush_from(t, 10),
-        )
-        for square in confetti_squares
-    ]
-    return confetti_spirils
+            # fade in the name and the picture
+            self.wait(1)
+            write_name = Write(name)
+            self.play(
+                write_name,
+                Write(sub, run_time=write_name.run_time),
+                Write(subsub, run_time=write_name.run_time),
+                FadeIn(img, shift=RIGHT),
+                *fade_outs
+            )
+        while fade_list:
+            fade_outs = fade_list[0]
+            fade_list = fade_list[1:]
+            # fade in the name and the picture
+            self.wait(1)
+            self.play(*fade_outs)
+        self.wait(1)
