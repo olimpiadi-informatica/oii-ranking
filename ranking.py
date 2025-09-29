@@ -27,6 +27,126 @@ ranking = [u for u in reversed(ranking) if u["medal"].lower() in MEDAL_NAMES[MED
 print('Rendering ranking of %d students with medal "%s"...\n' % (len(ranking), MEDAL))
 
 
+class Mention(Scene):
+    def construct(self):
+        self.camera.background_color = BACKGROUND_COLOR
+
+        ARRX, ARRY, SCALE = GROUPS_ARRAY["mention"][0]
+        BUNCH = ARRX * (ARRY-1)
+        fade_list = []
+        for i,user in enumerate(ranking):
+            username = user["username"]
+            print(f"====== Processing {username} ========")
+
+            play_list, fade_bunch = Mention.student_badge(i, user, ARRX, ARRY, SCALE)
+            fade_list.append(fade_bunch)
+            fade_outs = []
+            if len(fade_list) >= BUNCH:
+                fade_outs = fade_list[0]
+                fade_list = fade_list[1:]
+
+            # fade in the name and the picture
+            self.wait(MEDAL_DELAY["mention"])
+            self.play(
+                *play_list,
+                *fade_outs
+            )
+        while fade_list:
+            fade_outs = fade_list[0]
+            fade_list = fade_list[1:]
+            # fade in the name and the picture
+            self.wait(MEDAL_DELAY["mention"])
+            self.play(*fade_outs)
+        self.wait(1)
+
+    def student_badge(i, user, mx, my, scale):
+            x = i % mx
+            y = (i//mx) % my
+            x = -WIDTH + 2*WIDTH*x/mx
+            y = HEIGHT - 2*HEIGHT*y/my
+
+            # face
+            username = user["username"]
+            face_path = os.path.join(FACE_DIR, username + ".jpg")
+            if os.path.exists(face_path):
+                img = ImageMobject(face_path)
+            else:
+                print(f"!!! Face of {username} at {face_path} not found")
+                img = ImageMobject(PATH_NO_FACE)
+            img.height = 1.5*scale
+            img.to_corner(DOWN + LEFT)
+            img.set_x(x, LEFT)
+            img.set_y(y, UP)
+
+            # name
+            name = Tex(user["name"])
+            name.scale(1.4*scale)
+            name.set_x(img.get_x(RIGHT) + 0.2, LEFT)
+            name.set_y(img.get_y(UP), UP)
+
+            # school
+            klass = CLASS[user["class"]]
+            school = user["school"]
+            city = user["city"]
+            province = " (%s)" % user["province"] if user.get("province") else ""
+
+            subsub = Tex(f"{city}{province}")
+            subsub.scale(0.8*scale)
+            subsub.set_x(name.get_x(LEFT), LEFT)
+            subsub.set_y(img.get_y(DOWN), DOWN)
+
+            sub = Tex(f"Classe {klass}, {school}")
+            sub.scale(0.8*scale)
+            sub.set_x(name.get_x(LEFT), LEFT)
+            sub.set_y((name.get_y(DOWN) + subsub.get_y(UP))/2)
+
+            # Fade in
+            write_name = Write(name)
+            play_list = [
+                write_name,
+                Write(sub, run_time=write_name.run_time),
+                Write(subsub, run_time=write_name.run_time),
+                FadeIn(img, shift=RIGHT),
+            ]
+
+            # Fade out
+            fade_list = [
+                FadeOut(name),
+                FadeOut(sub),
+                FadeOut(subsub),
+                FadeOut(img),
+            ]
+
+            # medal
+            if MEDAL in MEDAL_COLORS:
+                medal = ImageMobject(PATH_MEDAL)
+                medal.scale(0.25*scale)
+                medal.set_color(MEDAL_COLORS[MEDAL])
+                medal.next_to(name)
+                play_list.append(FadeIn(medal, scale=2))
+                fade_list.append(FadeOut(medal))
+                if user["position"] != float("inf"):
+                    position = Tex(r"\textbf{%d}" % user["position"])
+                    position.scale(0.7*scale)
+                    position.move_to(medal)
+                    position.set_color(BLACK)
+                    play_list.append(FadeIn(position, scale=2))
+                    fade_list.append(FadeOut(position))
+
+            # po
+            if user["po"]:
+                po = Circle(stroke_color=WHITE)
+                po.scale(0.4*scale)
+                po.next_to(medal if MEDAL in MEDAL_COLORS else name)
+                po_text = Tex("PO")
+                po_text.scale(0.8*scale)
+                po_text.move_to(po)
+                play_list += [Create(po), Write(po_text)]
+                fade_list += [FadeOut(po), FadeOut(po_text)]
+
+            return play_list, fade_list
+
+
 class Medal(Scene):
     def construct(self):
         self.camera.background_color = BACKGROUND_COLOR
@@ -34,6 +154,11 @@ class Medal(Scene):
         self.start_time = [datetime.strptime(s, "%Y-%m-%dT%H:%M:%S") for s in CONTEST_START]
         self.end_time = [datetime.strptime(e, "%Y-%m-%dT%H:%M:%S") for e in CONTEST_END]
         self.timelapse = False
+        groups = GROUPS_ARRAY[MEDAL]
+        count = 0
+        group_count = 0
+        group_play = []
+        group_fade = []
 
         logo = ImageMobject(PATH_LOGO)
         logo.scale(0.5)
@@ -44,6 +169,12 @@ class Medal(Scene):
             username = user["username"]
             self.position = user["position"]
             print(f"====== Processing {username} ({self.position}) ========")
+
+            if groups:
+                count += 1
+                p, f = Mention.student_badge(count, user, *groups[0])
+                group_play += p
+                group_fade += f
 
             self.screen_dir = os.path.join(SCREEN_DIR, username)
             self.history = [{"time": 0, "score": 0.0}, *history[username]]
@@ -161,7 +292,7 @@ class Medal(Scene):
             # medal
             medal = ImageMobject(PATH_MEDAL)
             medal.scale(0.75)
-            medal.set_color(MEDAL_COLORS[user["medal"]])
+            medal.set_color(MEDAL_COLORS[MEDAL])
             medal.move_to([2, 0, 0])  # TODO: fix medal Y position
 
             # confetti boom
@@ -202,13 +333,13 @@ class Medal(Scene):
 
             # winner confetti
             confetti = []
-            if WINNER_CONFETTI and self.position == 1:
+            if WINNER_CONFETTI_DURATION and self.position == 1:
                 # self.wait(1)
                 confetti = get_confetti_animations(150)
                 self.add(*confetti)
                 self.wait(WINNER_CONFETTI_DURATION)
             else:
-                self.wait(MEDAL_DELAY[user["medal"]])
+                self.wait(MEDAL_DELAY[MEDAL])
 
             # Fade out
             fade_outs = [
@@ -227,6 +358,20 @@ class Medal(Scene):
                     FadeOut(po_text),
                 ]
             self.play(*fade_outs)
+
+            if groups and count == groups[0][0]*groups[0][1]:
+                group_count += 1
+                print(f"====== Group {group_count} ({groups[0]}) ========")
+                self.play(FadeOut(logo))
+                self.play(*group_play)
+                self.wait(2)
+                self.play(*group_fade)
+                self.play(FadeIn(logo))
+                count = 0
+                groups = groups[1:]
+                group_play = []
+                group_fade = []
+
         self.play(FadeOut(logo))
 
     def get_screen(self, index):
@@ -297,94 +442,3 @@ class Silver(Medal):
 
 class Bronze(Medal):
     pass
-
-class Mention(Scene):
-    def construct(self):
-        self.camera.background_color = BACKGROUND_COLOR
-
-        ARRX, ARRY = MENTION_ARRAY
-        BUNCH = ARRX * (ARRY-1)
-        fade_list = []
-        for i,user in enumerate(ranking):
-            username = user["username"]
-            print(f"====== Processing {username} ========")
-            x = i % ARRX
-            y = (i//ARRX) % ARRY
-
-            scale = 0.7
-
-            # face
-            face_path = os.path.join(FACE_DIR, username + ".jpg")
-            if os.path.exists(face_path):
-                img = ImageMobject(face_path)
-            else:
-                print(f"!!! Face of {username} at {face_path} not found")
-                img = ImageMobject(PATH_NO_FACE)
-            img.height = 1.5*scale
-            img.to_corner(DOWN + LEFT)
-            img.set_x(-WIDTH + 2*WIDTH*x/ARRX, LEFT)
-            img.set_y(HEIGHT - 2*HEIGHT*y/ARRY, UP)
-
-            # name
-            name = Tex(user["name"])
-            name.scale(1.4*scale)
-            name.set_x(img.get_x(RIGHT) + 0.2, LEFT)
-            name.set_y(img.get_y(UP), UP)
-
-            # school
-            klass = CLASS[user["class"]]
-            school = user["school"]
-            city = user["city"]
-            province = " (%s)" % user["province"] if user.get("province") else ""
-
-            subsub = Tex(f"{city}{province}")
-            subsub.scale(0.8*scale)
-            subsub.set_x(name.get_x(LEFT), LEFT)
-            subsub.set_y(img.get_y(DOWN), DOWN)
-
-            sub = Tex(f"Classe {klass}, {school}")
-            sub.scale(0.8*scale)
-            sub.set_x(name.get_x(LEFT), LEFT)
-            sub.set_y((name.get_y(DOWN) + subsub.get_y(UP))/2)
-
-            # po
-            po = Circle(stroke_color=WHITE)
-            po.scale(0.5)
-            po.next_to(name)
-            po_text = Tex("PO")
-            po_text.move_to(po)
-            if user["po"]:
-                self.play(
-                    Create(po),
-                    Write(po_text),
-                )
-
-            # Fade out
-            fade_list.append([
-                FadeOut(name),
-                FadeOut(sub),
-                FadeOut(subsub),
-                FadeOut(img),
-            ] + ([FadeOut(po)] if user["po"] else []))
-            fade_outs = []
-            if len(fade_list) >= BUNCH:
-                fade_outs = fade_list[0]
-                fade_list = fade_list[1:]
-
-            # fade in the name and the picture
-            self.wait(1)
-            write_name = Write(name)
-            self.play(
-                write_name,
-                Write(sub, run_time=write_name.run_time),
-                Write(subsub, run_time=write_name.run_time),
-                FadeIn(img, shift=RIGHT),
-                *fade_outs
-            )
-        while fade_list:
-            fade_outs = fade_list[0]
-            fade_list = fade_list[1:]
-            # fade in the name and the picture
-            self.wait(1)
-            self.play(*fade_outs)
-        self.wait(1)

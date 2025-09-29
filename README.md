@@ -48,7 +48,7 @@ Medal can be Gold, Silver, Bronze or Mention (case-sensitive).
 
 The rendered video is stored at `./media/videos/slide/`.
 
-In `config.py` you can specify many other properties, including the array configuration for mentions (property `MENTION_ARRAY`).
+In `config.py` you can specify many other properties, including the subdivision in groups for medals (property `GROUPS_ARRAY`). If groups is `None`, no group summary picture is presented. Otherwise, each group should contain the number of columns, rows, and a scale factor. Mentions should have exactly one group, but the size of the group does not have to correspond to the number of mentions.
 
 #### Render overlays
 
