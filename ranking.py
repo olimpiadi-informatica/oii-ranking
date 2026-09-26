@@ -5,6 +5,11 @@ from datetime import datetime
 from glob import glob
 
 from manim import *
+import pillow_jxl  # noqa: F401 -- registers JPEG XL support in Pillow
+
+# Manim keeps only 100 partial movie files by default and deletes the oldest ones after each
+# render; a full medal scene has more animations than that, so it would lose its cache.
+config.max_files_cached = 1000
 
 WIDTH, HEIGHT = config.frame_x_radius, config.frame_y_radius
 WIDTH -= 0.5
@@ -21,8 +26,16 @@ with open(os.path.join(OUTPUT_DIR, "history.json")) as f:
 with open(os.path.join(OUTPUT_DIR, "ranking.json")) as f:
     ranking = json.load(f)
 
-MEDAL = sys.argv[4].lower()
+# The scene name is found by value, so extra manim options (e.g. --media_dir) can go anywhere
+MEDAL = next((a.lower() for a in sys.argv[1:] if a.lower() in MEDAL_NAMES), None)
+if MEDAL is None:
+    raise SystemExit("Usage: manim render [options] ranking.py <Gold|Silver|Bronze|Mention>")
 ranking = [u for u in reversed(ranking) if u["medal"].lower() in MEDAL_NAMES[MEDAL]][-MAX_USERS:]
+
+def group_size(group):
+    """Number of contestants of a group: the optional 4th element, else columns * rows."""
+    return group[3] if len(group) > 3 else group[0] * group[1]
+
 
 print('Rendering ranking of %d students with medal "%s"...\n' % (len(ranking), MEDAL))
 
@@ -63,7 +76,9 @@ class Mention(Scene):
             x = i % mx
             y = (i//mx) % my
             x = -WIDTH + 2*WIDTH*x/mx
-            y = HEIGHT - 2*HEIGHT*y/my
+            # rows are packed together, and the whole grid is centered vertically
+            row_h = 1.5*scale + GROUP_ROW_GAP
+            y = my*row_h/2 - row_h*y
 
             # face
             username = user["username"]
@@ -78,11 +93,20 @@ class Mention(Scene):
             img.set_x(x, LEFT)
             img.set_y(y, UP)
 
+            # Text is shrunk to fit its tile. The medal and the PO circle sit to the right of
+            # the name, so the name gets less room; school and city are long and stay small.
+            text_w = 2*WIDTH/mx - img.width - 0.2 - 0.3
+            name_w = text_w
+            if MEDAL in MEDAL_COLORS:
+                name_w -= 0.95*scale + 0.25
+            if user["po"]:
+                name_w -= 0.8*scale + 0.25
+
             # name
             name = Tex(user["name"])
-            name.scale(1.4*scale)
-            name.set_x(img.get_x(RIGHT) + 0.2, LEFT)
-            name.set_y(img.get_y(UP), UP)
+            name.scale(1.1*scale)
+            if name.width > name_w:
+                name.width = name_w
 
             # school
             klass = CLASS[user["class"]]
@@ -91,14 +115,19 @@ class Mention(Scene):
             province = " (%s)" % user["province"] if user.get("province") else ""
 
             subsub = Tex(f"{city}{province}")
-            subsub.scale(0.8*scale)
-            subsub.set_x(name.get_x(LEFT), LEFT)
-            subsub.set_y(img.get_y(DOWN), DOWN)
+            subsub.scale(0.5*scale)
+            if subsub.width > text_w:
+                subsub.width = text_w
 
             sub = Tex(f"Classe {klass}, {school}")
-            sub.scale(0.8*scale)
-            sub.set_x(name.get_x(LEFT), LEFT)
-            sub.set_y((name.get_y(DOWN) + subsub.get_y(UP))/2)
+            sub.scale(0.5*scale)
+            if sub.width > text_w:
+                sub.width = text_w
+
+            # the three lines are stacked tightly and centered on the face
+            text = VGroup(name, sub, subsub).arrange(DOWN, aligned_edge=LEFT, buff=0.12*scale)
+            text.set_x(img.get_x(RIGHT) + 0.2, LEFT)
+            text.set_y(img.get_y())
 
             # Fade in
             write_name = Write(name)
@@ -161,7 +190,7 @@ class Medal(Scene):
         group_fade = []
 
         logo = ImageMobject(PATH_LOGO)
-        logo.scale(0.5)
+        logo.scale(0.2)  # logo.png is 1200px tall, so this is 20% smaller than the old 600px logo at 0.5
         logo.to_corner(UP + RIGHT)
         self.add(logo)
 
@@ -171,8 +200,8 @@ class Medal(Scene):
             print(f"====== Processing {username} ({self.position}) ========")
 
             if groups:
+                p, f = Mention.student_badge(count, user, *groups[0][:3])
                 count += 1
-                p, f = Mention.student_badge(count, user, *groups[0])
                 group_play += p
                 group_fade += f
 
@@ -222,7 +251,9 @@ class Medal(Scene):
             # timelapse
             self.screenshots = []
             for screen in sorted(glob(os.path.join(self.screen_dir, "*"))):
-                when = os.path.basename(screen)[: -len(".png")]
+                when, ext = os.path.splitext(os.path.basename(screen))
+                if ext.lower() not in SCREEN_EXTENSIONS:
+                    continue
                 try:
                     when = datetime.strptime(when, "%Y-%m-%dT%H:%M:%S.%f")
                 except ValueError:
@@ -284,6 +315,12 @@ class Medal(Scene):
             self.wait(self.timelapse_dur)
             self.timelapse = False
             self.always_update_mobjects = False
+
+            # the updaters must not fire during the animations below (with cached
+            # animations they would run on a stale timelapse state and break the score)
+            self.screen.clear_updaters()
+            self.score.clear_updaters()
+            self.progress.clear_updaters()
 
             # make sure the final score is shown
             self.score.become(self.get_score(-1))
@@ -359,7 +396,7 @@ class Medal(Scene):
                 ]
             self.play(*fade_outs)
 
-            if groups and count == groups[0][0]*groups[0][1]:
+            if groups and count == group_size(groups[0]):
                 group_count += 1
                 print(f"====== Group {group_count} ({groups[0]}) ========")
                 self.play(FadeOut(logo))

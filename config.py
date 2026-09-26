@@ -26,9 +26,12 @@ GROUPS_ARRAY = {
     "mention": [(2,5,0.7)]
 }
 
+GROUP_ROW_GAP = 0.2  # vertical space between the rows of a grid, on top of the face height
+
 # Images and directories
 OUTPUT_DIR = "output"
 SCREEN_DIR = "screenshots"
+SCREEN_EXTENSIONS = [".png", ".jxl"]
 FACE_DIR = OUTPUT_DIR + "/faces"
 PATH_LOGO = "images/logo.png"
 PATH_CUP = "images/cup.svg"
