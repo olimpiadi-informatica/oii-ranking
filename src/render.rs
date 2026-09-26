@@ -157,21 +157,6 @@ fn rgba_to_yuv420(rgba: &[u8], w: usize, h: usize) -> Vec<u8> {
     out
 }
 
-#[cfg(test)]
-mod tests {
-    #[test]
-    fn yuv_of_known_colors() {
-        let px = |r, g, b| [r, g, b, 255u8].repeat(4);
-        for ((r, g, b), (y, u, v)) in
-            [((255, 255, 255), (235, 128, 128)), ((0, 0, 0), (16, 128, 128)), ((255, 0, 0), (63, 102, 240))]
-        {
-            let out = super::rgba_to_yuv420(&px(r, g, b), 2, 2);
-            assert_eq!(&out[..4], &[y; 4]);
-            assert!((out[4] as i32 - u).abs() <= 1 && (out[5] as i32 - v).abs() <= 1, "{out:?}");
-        }
-    }
-}
-
 pub fn save_png(pixmap: tiny_skia::Pixmap, path: &Path) -> Result<()> {
     let (w, h) = (pixmap.width(), pixmap.height());
     let img = image::RgbaImage::from_raw(w, h, straight_rgba(pixmap)).context("frame")?;
@@ -295,4 +280,19 @@ pub fn render_video(scene: &Scene, canvas: &Canvas, images: &Images, opts: &Vide
         started.elapsed().as_secs_f64()
     );
     Ok(())
+}
+
+#[cfg(test)]
+mod tests {
+    #[test]
+    fn yuv_of_known_colors() {
+        let px = |r, g, b| [r, g, b, 255u8].repeat(4);
+        for ((r, g, b), (y, u, v)) in
+            [((255, 255, 255), (235, 128, 128)), ((0, 0, 0), (16, 128, 128)), ((255, 0, 0), (63, 102, 240))]
+        {
+            let out = super::rgba_to_yuv420(&px(r, g, b), 2, 2);
+            assert_eq!(&out[..4], &[y; 4]);
+            assert!((out[4] as i32 - u).abs() <= 1 && (out[5] as i32 - v).abs() <= 1, "{out:?}");
+        }
+    }
 }
