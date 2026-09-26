@@ -12,7 +12,8 @@ clap = { version = "4", features = ["derive"] }
 csv = "1"
 fast_image_resize = "5"
 image = { version = "0.25", default-features = false, features = ["png", "jpeg", "webp"] }
-jxl-oxide = { version = "0.12", features = ["image"] }
+jxl = "0.7"
+jxl-image-rs-integration = "0.7"
 kurbo = "0.13"
 rayon = "1"
 resvg = "0.48"

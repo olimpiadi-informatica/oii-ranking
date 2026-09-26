@@ -165,54 +165,56 @@ fn is_jxl(path: &Path) -> bool {
     path.extension().is_some_and(|e| e.eq_ignore_ascii_case("jxl"))
 }
 
-/// JPEG XL straight to premultiplied RGBA (much faster than going through `image`)
+/// JPEG XL (with jxl-rs) straight to premultiplied RGBA, without going through `image`
 fn decode_jxl(path: &Path) -> Result<Vec<u8>> {
-    // no thread pool: the frames are already decoded in parallel, and a nested pool
-    // could deadlock on the image locks (a waiting thread would steal a frame needing them)
-    let mut img = jxl_oxide::JxlImage::builder()
-        .pool(jxl_oxide::JxlThreadPool::none())
-        .open(path)
-        .map_err(|e| anyhow::anyhow!("{e}"))?;
-    if img.pixel_format().has_black() {
-        img.request_color_encoding(jxl_oxide::EnumColourEncoding::srgb(jxl_oxide::RenderingIntent::Relative));
-    }
-    let render = img.render_frame(0).map_err(|e| anyhow::anyhow!("{e}"))?;
-    let q = |v: f32| (v.clamp(0.0, 1.0) * 255.0 + 0.5) as u8;
+    use jxl::api::{JxlColorType, JxlDataFormat, JxlDecoder, JxlDecoderOptions, JxlOutputBuffer, JxlPixelFormat};
+    use jxl::api::{ProcessingResult, states};
+    use jxl::headers::extra_channels::ExtraChannel;
 
-    // fast path: planar RGB(A) floats, no rotation
-    let color = render.color_channels();
-    let (extra, extra_bufs) = render.extra_channels();
-    let alpha = extra.iter().position(|e| e.is_alpha()).and_then(|i| extra_bufs[i].as_float());
-    let planes: Option<Vec<_>> = color.iter().map(|c| c.as_float()).collect();
-    if let (Some(planes), 1) = (planes, img.image_header().metadata.orientation)
-        && planes.len() == 3
-    {
-        let (w, h) = (planes[0].width(), planes[0].height());
-        let mut out = vec![0u8; w * h * 4];
-        for (y, row) in out.chunks_exact_mut(w * 4).enumerate() {
-            let (r, g, b) = (planes[0].get_row(y), planes[1].get_row(y), planes[2].get_row(y));
-            let a = alpha.map(|a| a.get_row(y));
-            for x in 0..w {
-                let al = a.map_or(1.0, |a| a[x].clamp(0.0, 1.0));
-                row[x * 4..x * 4 + 4].copy_from_slice(&[q(r[x] * al), q(g[x] * al), q(b[x] * al), q(al)]);
-            }
+    fn complete<T, F>(r: jxl::error::Result<ProcessingResult<T, F>>) -> Result<T> {
+        match r.map_err(|e| anyhow::anyhow!("{e}"))? {
+            ProcessingResult::Complete { result } => Ok(result),
+            ProcessingResult::NeedsMoreInput { .. } => anyhow::bail!("truncated JPEG XL file"),
         }
-        return Ok(out);
     }
 
-    let frame = render.image_all_channels();
-    let (w, h, ch) = (frame.width(), frame.height(), frame.channels());
-    let src = frame.buf();
-    let mut out = vec![0u8; w * h * 4];
-    for (px, o) in src.chunks_exact(ch).zip(out.chunks_exact_mut(4)) {
-        let (r, g, b, a) = match ch {
-            1 => (px[0], px[0], px[0], 1.0),
-            2 => (px[0], px[0], px[0], px[1]),
-            3 => (px[0], px[1], px[2], 1.0),
-            _ => (px[0], px[1], px[2], px[3]),
-        };
-        let a = a.clamp(0.0, 1.0);
-        o.copy_from_slice(&[q(r * a), q(g * a), q(b * a), q(a)]);
+    let data = std::fs::read(path)?;
+    let mut input: &[u8] = &data;
+    // the decoder runs on the calling thread: frames are already decoded in parallel
+    let mut options = JxlDecoderOptions::default();
+    options.premultiply_output = true;
+    let mut decoder = complete(JxlDecoder::<states::Initialized>::new(options).process(&mut input, None))?;
+    let info = decoder.basic_info().clone();
+    let (w, h) = info.size;
+    let alpha = info.extra_channels.iter().any(|c| c.ec_type == ExtraChannel::Alpha);
+    let gray = decoder.current_pixel_format().color_type.is_grayscale();
+    let (color_type, channels) = match (gray, alpha) {
+        (true, false) => (JxlColorType::Grayscale, 1),
+        (true, true) => (JxlColorType::GrayscaleAlpha, 2),
+        (false, false) => (JxlColorType::Rgb, 3),
+        (false, true) => (JxlColorType::Rgba, 4),
+    };
+    decoder
+        .set_pixel_format(JxlPixelFormat {
+            color_type,
+            color_data_format: Some(JxlDataFormat::U8 { bit_depth: 8 }),
+            extra_channel_format: vec![None; info.extra_channels.len()],
+        })
+        .map_err(|e| anyhow::anyhow!("{e}"))?;
+    let frame = complete(decoder.process(&mut input, None))?;
+    let mut buf = vec![0u8; w * h * channels];
+    let mut output = JxlOutputBuffer::new(&mut buf, h, w * channels);
+    complete(frame.process(&mut input, std::slice::from_mut(&mut output), None))?;
+    if channels == 4 {
+        return Ok(buf);
+    }
+    let mut out = vec![255u8; w * h * 4];
+    for (px, o) in buf.chunks_exact(channels).zip(out.chunks_exact_mut(4)) {
+        match channels {
+            1 => o[..3].fill(px[0]),
+            2 => o.copy_from_slice(&[px[0], px[0], px[0], px[1]]),
+            _ => o[..3].copy_from_slice(px),
+        }
     }
     Ok(out)
 }
@@ -226,7 +228,7 @@ pub struct Images {
 
 impl Images {
     pub fn new() -> Images {
-        jxl_oxide::integration::register_image_decoding_hook();
+        jxl_image_rs_integration::register_image_decoding_hook();
         Images::default()
     }
 
@@ -333,4 +335,33 @@ pub fn no_screen_svg() -> String {
 <rect x="380" y="200" width="200" height="140" rx="10" fill="#27415a" stroke="#5b8fbf" stroke-width="6"/>
 </svg>"##
         .to_string()
+}
+
+#[cfg(test)]
+mod tests {
+    /// Decodes the file in $JXL_FILE to $JXL_OUT (raw RGBA), to compare with another decoder
+    #[test]
+    #[ignore]
+    fn decode_jxl_to_raw() {
+        let path = std::env::var("JXL_FILE").unwrap();
+        let data = super::decode_jxl(std::path::Path::new(&path)).unwrap();
+        std::fs::write(std::env::var("JXL_OUT").unwrap(), data).unwrap();
+    }
+
+    /// Decoding speed of the first 64 .jxl files in $JXL_DIR, in parallel as when rendering
+    #[test]
+    #[ignore]
+    fn decode_jxl_speed() {
+        use rayon::prelude::*;
+        let mut files: Vec<_> = std::fs::read_dir(std::env::var("JXL_DIR").unwrap())
+            .unwrap()
+            .map(|e| e.unwrap().path())
+            .filter(|p| super::is_jxl(p))
+            .collect();
+        files.sort();
+        files.truncate(64);
+        let t = std::time::Instant::now();
+        files.par_iter().for_each(|f| drop(super::decode_jxl(f).unwrap()));
+        println!("{:.1} ms/image", t.elapsed().as_secs_f64() * 1000.0 / files.len() as f64);
+    }
 }
