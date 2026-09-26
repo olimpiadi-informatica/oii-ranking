@@ -231,8 +231,6 @@ fn main() -> Result<()> {
                     label: m.title().to_string(),
                 };
                 render::render_video(&scene, &canvas, &images, &opts)?;
-                let (used, decoded, decodes) = images.decode_stats(Path::new(&config.paths.screen_dir));
-                println!("{}: screenshots: {used} in the video, {decoded} decoded, {decodes} decodes", m.title());
             }
             Ok(())
         }

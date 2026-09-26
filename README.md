@@ -61,7 +61,7 @@ oii-ranking render gold --from 60 --to 75          # a part of the video, in sec
 
 There is no cache to clean: every render starts from the data.
 
-Rendering time on a 16-core machine, with the default x264 settings: the gold video (2.5 minutes, 9 contestants) takes about 1.5 minutes at 1080p60 and about 3 minutes for the 7680x1080 version. Most of the time goes into the encoder and into decoding the JPEG XL screenshots of the timelapses (one per frame). On an NVIDIA card a GPU encoder can help: set `video.encoder` to `hevc_nvenc` and `video.encoder_options` to e.g. `["-preset", "p5", "-cq", "20"]` (NVENC h264 is limited to 4096 pixels of width, so use hevc for the wide version). VAAPI encoders (AMD, Intel) are not supported yet: they need the frames uploaded to the GPU.
+Rendering time on a 16-core machine, with the default x264 settings: the gold video (2.5 minutes, 9 contestants) takes about 1.5 minutes at 1080p60 and about 3 minutes for the 7680x1080 version. Most of the time goes into the encoder and into decoding the JPEG XL screenshots of the timelapses (one per frame). A GPU encoder can help: set `video.encoder` to e.g. `hevc_nvenc` and `video.encoder_options` to `["-preset", "p5", "-cq", "20"]` (NVENC h264 is limited to 4096 pixels of width, so use hevc for the wide version).
 
 ## Settings
 
