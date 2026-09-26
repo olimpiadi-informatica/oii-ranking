@@ -18,7 +18,7 @@ use crate::text::Font;
 fn label(pixmap: &mut tiny_skia::Pixmap, font: &Font, text: &str, x: f64, y: f64, size: f64) {
     let shape = font.shape(text, size, Color::WHITE);
     let tf = kurbo::Affine::translate((x + shape.w / 2.0, y + shape.h / 2.0)) * kurbo::Affine::FLIP_Y;
-    crate::vector::draw_shape(pixmap, &shape, tf, 1.0, 1.0, crate::vector::Reveal::Full);
+    crate::vector::draw_shape(&mut pixmap.as_mut(), &shape, tf, 1.0, 1.0, crate::vector::Reveal::Full);
 }
 
 pub fn make_test_data(config: &Config) -> Result<()> {

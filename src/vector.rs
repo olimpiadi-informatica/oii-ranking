@@ -144,7 +144,14 @@ pub enum Reveal {
 }
 
 /// Draws `shape` with `tf` mapping shape units to pixels; `ppu` is pixels per unit (for strokes)
-pub fn draw_shape(pixmap: &mut tiny_skia::Pixmap, shape: &Shape, tf: Affine, ppu: f64, opacity: f64, reveal: Reveal) {
+pub fn draw_shape(
+    pixmap: &mut tiny_skia::PixmapMut,
+    shape: &Shape,
+    tf: Affine,
+    ppu: f64,
+    opacity: f64,
+    reveal: Reveal,
+) {
     let n = shape.parts.len();
     for (i, part) in shape.parts.iter().enumerate() {
         match reveal {
@@ -200,7 +207,7 @@ pub fn paint(color: Color, opacity: f64) -> tiny_skia::Paint<'static> {
 }
 
 fn draw_part(
-    pixmap: &mut tiny_skia::Pixmap,
+    pixmap: &mut tiny_skia::PixmapMut,
     path: &BezPath,
     tf: Affine,
     fill: Option<Color>,

@@ -338,6 +338,40 @@ pub struct Drawn {
     pub scale: f64,
     pub opacity: f64,
     pub reveal: Reveal,
+    /// Whether it changes during its segment (see [`Segments`]); the other objects look the
+    /// same in every frame of the segment
+    pub dynamic: bool,
+}
+
+/// The timeline cut at every event (an object appearing or disappearing, an animation
+/// starting or ending, a change of content). Within a segment, every object either keeps the
+/// same look or is dynamic for the whole segment.
+pub struct Segments {
+    starts: Vec<f64>,
+}
+
+impl Segments {
+    /// Index of the segment containing time t
+    pub fn index(&self, t: f64) -> usize {
+        self.starts.partition_point(|&s| s <= t).saturating_sub(1)
+    }
+
+    /// A time inside segment i, away from its ends
+    pub fn mid(&self, i: usize) -> f64 {
+        match self.starts.get(i + 1) {
+            Some(&next) => (self.starts[i] + next) / 2.0,
+            None => self.starts[i] + 1.0,
+        }
+    }
+
+    /// Number of frames in segment i
+    pub fn frames(&self, i: usize, fps: f64) -> usize {
+        let first = |t: f64| (t * fps - 1e-6).ceil().max(0.0) as usize;
+        match self.starts.get(i + 1) {
+            Some(&next) => first(next) - first(self.starts[i]),
+            None => usize::MAX,
+        }
+    }
 }
 
 pub struct Scene {
@@ -486,15 +520,42 @@ impl Scene {
         self.frame += frames;
     }
 
+    pub fn segments(&self) -> Segments {
+        let mut starts = vec![0.0];
+        for o in self.objs.iter().filter(|o| o.start.is_finite()) {
+            starts.push(o.start);
+            if o.end.is_finite() {
+                starts.push(o.end);
+            }
+            for a in o.anims.iter().filter(|a| !matches!(a.kind, Kind::Hold)) {
+                starts.extend([a.t0, a.t0 + a.dur]);
+            }
+            starts.extend(o.contents.iter().map(|(from, _)| *from).filter(|t| t.is_finite()));
+        }
+        starts.retain(|&t| t >= 0.0);
+        starts.sort_by(f64::total_cmp);
+        starts.dedup();
+        Segments { starts }
+    }
+
     /// What is on screen at time t, bottom to top
     pub fn frame_at(&self, t: f64) -> Vec<Drawn> {
+        self.frame_in_segment(t, t)
+    }
+
+    /// What is on screen at time t, bottom to top, with `dynamic` set for the objects that
+    /// change during the segment containing t (`mid` is a time inside it: see [`Segments::mid`])
+    pub fn frame_in_segment(&self, t: f64, mid: f64) -> Vec<Drawn> {
         let mut out: Vec<(usize, Drawn)> = vec![];
         for o in &self.objs {
             if !(o.start <= t && t < o.end) {
                 continue;
             }
-            let idx = o.contents.partition_point(|(from, _)| *from <= t).saturating_sub(1);
-            let Some(mut mob) = (match &o.contents[idx].1 {
+            let content_at =
+                |t: f64| &o.contents[o.contents.partition_point(|(from, _)| *from <= t).saturating_sub(1)].1;
+            let dynamic = matches!(content_at(mid), Content::Func(_))
+                || o.anims.iter().any(|a| !matches!(a.kind, Kind::Hold) && a.t0 < mid && mid < a.t0 + a.dur);
+            let Some(mut mob) = (match content_at(t) {
                 Content::Static(m) => Some(m.clone()),
                 Content::Func(f) => f(t),
             }) else {
@@ -540,7 +601,7 @@ impl Scene {
             }
             mob.x += dx;
             mob.y += dy;
-            out.push((o.z, Drawn { mob, scale, opacity, reveal }));
+            out.push((o.z, Drawn { mob, scale, opacity, reveal, dynamic }));
         }
         out.sort_by_key(|(z, _)| *z);
         out.into_iter().map(|(_, d)| d).collect()
