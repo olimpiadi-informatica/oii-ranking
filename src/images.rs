@@ -39,6 +39,8 @@ pub struct Img {
     decoded: Mutex<Option<Arc<Vec<u8>>>>,
     scaled: Mutex<HashMap<(u32, u32), Arc<Resized>>>,
     last_used: AtomicUsize,
+    /// How many times the file was decoded (for the statistics)
+    decodes: AtomicUsize,
 }
 
 impl Img {
@@ -127,6 +129,7 @@ impl Img {
         if let Some(d) = &*slot {
             return Ok(d.clone());
         }
+        self.decodes.fetch_add(1, Ordering::Relaxed);
         let img = match &self.source {
             Source::File(path) if is_jxl(path) => {
                 let data = Arc::new(decode_jxl(path).with_context(|| format!("decoding {}", path.display()))?);
@@ -295,9 +298,21 @@ impl Images {
             decoded: Mutex::new(None),
             scaled: Mutex::new(HashMap::new()),
             last_used: AtomicUsize::new(0),
+            decodes: AtomicUsize::new(0),
         });
         self.all.lock().unwrap().push(img.clone());
         img
+    }
+
+    /// Decoding statistics of the image files under `dir`: (files used in the video,
+    /// files decoded, decodes in total)
+    pub fn decode_stats(&self, dir: &Path) -> (usize, usize, usize) {
+        let all = self.all.lock().unwrap();
+        let files = all.iter().filter(|i| matches!(&i.source, Source::File(p) if p.starts_with(dir)));
+        files.fold((0, 0, 0), |(n, d, t), i| {
+            let k = i.decodes.load(Ordering::Relaxed);
+            (n + 1, d + (k > 0) as usize, t + k)
+        })
     }
 
     /// Frees the pixels of the images not used since `epoch`
