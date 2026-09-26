@@ -1,13 +1,19 @@
+# contest data
 output/
 subs/
 faces/
 screenshots/
 ranking/
 ranking.csv
-__pycache__/
-media/
 photos/
+orig/
 *.jpg
+
+# rendered videos
+media/
+
+# build
+target/
+
 .DS_Store
 .log
-

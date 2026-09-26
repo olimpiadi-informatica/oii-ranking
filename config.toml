@@ -1,0 +1,115 @@
+# Settings of the ranking videos. Any key left out of this file takes the default value
+# of the copy built into the binary (the version of this file in the repository).
+#
+# Sizes are in "units": the frame is 8 units tall (the width follows from the aspect
+# ratio: 14.2 units for 16:9, 56.9 for 64:9) and the origin is at its center.
+
+# Reduce for debugging: only the best MAX_USERS contestants of each medal are shown
+max_users = 999
+
+[contest]
+# One entry per contest day (local time)
+start = ["2026-09-25T09:00:00"]
+end = ["2026-09-25T14:00:01"]
+max_score = 400
+
+[timing]
+# Seconds each contestant stays on screen after the medal is shown
+medal_delay = { gold = 2, silver = 1, bronze = 0.5, mention = 1 }
+timelapse_duration = 4
+winner_confetti_duration = 10 # if 0, no winner confetti at all
+
+# Medal groups (recap pages): [columns, rows, scale] or [columns, rows, scale, contestants].
+# A recap is shown after every group; `contestants` defaults to columns*rows and is only
+# needed when the grid has empty slots. Contestants are shown from the lowest position to
+# the best one. An empty list means no recap pages. Mentions use only their first group.
+[groups]
+gold = [[2, 3, 0.7, 5], [2, 2, 0.8, 4]] # last 5 golds, then the top 4
+silver = [[2, 3, 0.7], [2, 3, 0.7], [2, 3, 0.7]] # 18 silvers, 6 at a time
+bronze = [[2, 5, 0.7], [2, 5, 0.7], [2, 5, 0.7]] # 30 bronzes, 10 at a time
+mention = [[2, 5, 0.7]]
+row_gap = 0.2 # vertical space between the rows of a grid, on top of the face height
+
+# Paths are relative to the data directory (the current one, or the one given with -C)
+[paths]
+output_dir = "output"
+screen_dir = "screenshots"
+screen_extensions = [".png", ".jxl"]
+face_dir = "output/faces"
+logo = "images/logo.png"
+cup = "images/cup.svg"
+medal = "images/medal.png"
+no_face = "images/noface.jpg" # a built-in placeholder is used if the file is missing
+no_screen = "images/circuits.png" # same
+videos = "media/rust" # rendered videos go to <videos>/<standard|wide>/<height>p<fps>/<Medal>.mp4
+
+# Fonts (OpenType/TrueType files). Empty = New Computer Modern, built into the binary.
+[fonts]
+regular = ""
+bold = ""
+
+[medal_names]
+gold = ["gold", "oro"]
+silver = ["silver", "argento"]
+bronze = ["bronze", "bronzo"]
+mention = ["mention", "menzione"]
+
+[colors]
+gold = "#FFD700"
+silver = "#C0C0C0"
+bronze = "#CC6633"
+background = "#222222"
+
+# Class numbers in ranking.csv -> how they are shown
+[class_names]
+1 = "I"
+2 = "II"
+3 = "III"
+4 = "IV"
+5 = "V"
+6 = "I"
+7 = "II"
+8 = "III"
+9 = "I"
+10 = "II"
+11 = "III"
+12 = "IV"
+13 = "V"
+
+[video]
+# Any ffmpeg video encoder: libx264 (default), h264_nvenc, hevc_nvenc, libx265, ...
+encoder = "libx264"
+# Extra ffmpeg options for the encoder
+encoder_options = ["-preset", "medium", "-crf", "18"]
+
+# 64:9 layout (render with --wide). Everything above applies to it too, except the groups
+# and the row gap, which are overridden here.
+[wide]
+aspect = [64, 9]
+
+# Horizontal layout of the medal scenes, left to right, as fractions of the width
+# (they must sum to 1)
+zone_fractions = { logo_left = 0.1875, info = 0.25, score = 0.125, screen = 0.25, logo_right = 0.1875 }
+
+# Top score bar
+bar_height = 0.5
+bar_color_no_medal = "#3B82F6"
+bar_speed = 6.0 # how fast the bar follows the score, in 1/s (higher = snappier)
+
+margin = 0.4 # vertical margin of the content, and horizontal margin inside a zone
+logo_scale = 0.9 # size of the logos relative to the space they have
+score_scale = 2.4
+name_scale = 2.2 # name in the info zone
+info_scale = 1.0 # class, school and city (one line) in the info zone
+medal_scale = 1.0
+
+# Recap pages: a grid centered between the two logos, sized by its scale; the mentions are
+# the exception: they are tiled between the logos over their whole width.
+group_tile_width = 10.5 # width of one recap tile at scale 1
+row_gap = 0.3
+
+[wide.groups]
+gold = [[2, 3, 1.2, 5], [2, 2, 1.5, 4]] # last 5 golds, then the top 4
+silver = [[2, 3, 1.2], [2, 3, 1.2], [2, 3, 1.2]] # 18 silvers, 6 at a time
+bronze = [[2, 5, 0.65], [2, 5, 0.65], [2, 5, 0.65]] # 30 bronzes, 10 at a time
+mention = [[5, 5, 0.7]]

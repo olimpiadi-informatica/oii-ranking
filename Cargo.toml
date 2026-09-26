@@ -1,0 +1,30 @@
+[package]
+name = "oii-ranking"
+version = "0.1.0"
+edition = "2024"
+description = "Award ceremony videos for the Italian Olympiad in Informatics"
+publish = false
+
+[dependencies]
+anyhow = "1"
+chrono = "0.4"
+clap = { version = "4", features = ["derive"] }
+csv = "1"
+fast_image_resize = "5"
+image = { version = "0.25", default-features = false, features = ["png", "jpeg", "webp"] }
+jxl-oxide = { version = "0.12", features = ["image"] }
+kurbo = "0.13"
+rayon = "1"
+resvg = "0.48"
+rustybuzz = "0.20"
+serde = { version = "1", features = ["derive"] }
+serde_json = { version = "1", features = ["preserve_order"] }
+toml = "0.9"
+zip = { version = "2", default-features = false, features = ["deflate"] }
+
+[profile.release]
+debug = false
+
+# Dependencies are slow without optimizations (image decoding, rasterization)
+[profile.dev.package."*"]
+opt-level = 3
