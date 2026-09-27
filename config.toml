@@ -77,12 +77,14 @@ background = "#222222"
 13 = "V"
 
 [video]
-# Hardware encoding with a GPU (VAAPI: AMD and Intel GPUs on Linux). "auto" tests the GPUs
-# before rendering and uses the first one that can encode the video (H.264, or HEVC when
-# wider than 4096 pixels), else the CPU encoder below; "off" always uses the CPU encoder;
-# a device, e.g. "/dev/dri/renderD128", tests only that GPU.
+# Hardware encoding with a GPU (NVIDIA through NVENC, AMD and Intel through VAAPI). "auto"
+# tests the GPUs before rendering, NVIDIA first, and uses the first one that can encode the
+# video (H.264, or HEVC when wider than 4096 pixels), else the CPU encoder below; "off"
+# always uses the CPU encoder; a device, e.g. "/dev/nvidia0" or "/dev/dri/renderD128",
+# tests only that GPU.
 hardware = "auto"
-# Quality of the hardware encoder: lower is better and bigger (20 is close to x264's crf 18)
+# Quality of the hardware encoder (VAAPI's qp, NVENC's cq): lower is better and bigger
+# (20 is close to x264's crf 18)
 hardware_qp = 20
 # CPU encoder: any ffmpeg video encoder, e.g. libx264 (default), libx265, h264_nvenc, hevc_nvenc
 encoder = "libx264"

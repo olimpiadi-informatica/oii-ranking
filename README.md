@@ -65,13 +65,11 @@ Rendering time on a 16-core laptop (Ryzen 9 6900HX), encoding on the CPU with x2
 
 ## Hardware encoding
 
-Encoding on the GPU leaves the CPU free for drawing the frames. There are two ways, depending on the GPU.
+Encoding on the GPU leaves the CPU free for drawing the frames. By default (`video.hardware = "auto"` in `config.toml`) the program finds the GPUs by itself: NVIDIA cards (through NVENC) first, since they are usually the faster, then AMD and Intel ones (through VAAPI). Before rendering, it encodes a few test frames of the video's size on each, checks that they decode at the right size, and uses the first GPU that passes: H.264, or HEVC for videos wider than 4096 pixels (the most H.264 hardware encoders accept), such as the 7680x1080 version. It prints which encoder it uses and, when no GPU works, why. Set `video.hardware = "off"` to never use the GPU, or to a device (e.g. `"/dev/nvidia0"` or `"/dev/dri/renderD128"`) to test only that one.
 
-**AMD (and Intel) GPUs, automatic.** By default (`video.hardware = "auto"` in `config.toml`) the program encodes through VAAPI when it can. Before rendering, it encodes a few test frames of the video's size on each GPU, checks that they decode at the right size, and uses the first GPU that passes: H.264, or HEVC for videos wider than 4096 pixels (the most H.264 hardware encoders accept), such as the 7680x1080 version. It prints which encoder it uses and, when no GPU works, why. Set `video.hardware = "off"` to never use the GPU, or to a device (e.g. `"/dev/dri/renderD128"`) to test only that one.
+**Fallbacks.** When no GPU passes the test, the encoder of `video.encoder` is used (x264 by default, on the CPU). If the GPU fails during a render, the video is rendered again with that encoder. If ffmpeg lacks it (Fedora's default ffmpeg has no x264), `libopenh264` is used instead, up to 4096 pixels of width.
 
-**NVIDIA GPUs, by hand.** NVIDIA's encoder (NVENC) is not reachable through VAAPI, so it is not detected: name it as the encoder in `config.toml` (see below).
-
-**Fallbacks.** When no GPU passes the test, the encoder of `video.encoder` is used (x264 by default, on the CPU). If the GPU fails during a render, the video is rendered again with that encoder. If ffmpeg lacks it (Fedora's default ffmpeg has no x264), `libopenh264` is used instead, up to 4096 pixels of width. An encoder named in `video.encoder` (like NVENC) is not tested beforehand: if it fails, the render stops with ffmpeg's error, and setting `video.encoder` back to `libx264` goes back to the CPU.
+All the GPU needs is the right driver, below; nothing has to be set in `config.toml`.
 
 ### AMD
 
@@ -83,7 +81,7 @@ The GPU needs the VAAPI driver of Mesa with the H.264 and HEVC encoders:
 | Fedora | Fedora's own Mesa lacks the encoders (for patent reasons): take RPM Fusion's.<br>`sudo dnf install https://mirrors.rpmfusion.org/free/fedora/rpmfusion-free-release-$(rpm -E %fedora).noarch.rpm`<br>`sudo dnf swap mesa-va-drivers mesa-va-drivers-freeworld`<br>`sudo dnf install libva-utils`<br>(to undo: `sudo dnf swap mesa-va-drivers-freeworld mesa-va-drivers`) |
 | Arch | `sudo pacman -S mesa libva-utils` (the VAAPI driver is part of `mesa`; on older installs it is the separate `libva-mesa-driver`) |
 
-Without the encoders the program reports `Compatible profile ... is not supported by driver` and uses the CPU. To check the driver: `vainfo --display drm --device /dev/dri/renderD128 | grep EncSlice` should list `VAProfileH264High` and `VAProfileHEVCMain` (if there are several GPUs, the others are `renderD129`, ...). Nothing needs to be set in `config.toml`.
+Without the encoders the program reports `Compatible profile ... is not supported by driver` and uses the CPU. To check the driver: `vainfo --display drm --device /dev/dri/renderD128 | grep EncSlice` should list `VAProfileH264High` and `VAProfileHEVCMain` (if there are several GPUs, the others are `renderD129`, ...).
 
 ### NVIDIA
 
@@ -95,16 +93,7 @@ The GPU needs NVIDIA's proprietary driver (it contains the encoder library, `lib
 | Fedora | Enable RPM Fusion free and nonfree (see [rpmfusion.org](https://rpmfusion.org/Configuration)), then `sudo dnf install akmod-nvidia xorg-x11-drv-nvidia-cuda-libs` and reboot |
 | Arch | `sudo pacman -S nvidia-open nvidia-utils` (or `nvidia` for cards older than the GTX 16xx series), then reboot |
 
-Then, in `config.toml`:
-
-```toml
-[video]
-hardware = "off" # do not try VAAPI (e.g. the integrated GPU of a laptop)
-encoder = "hevc_nvenc"
-encoder_options = ["-preset", "p5", "-rc", "vbr", "-cq", "20", "-b:v", "0", "-tag:v", "hvc1"]
-```
-
-HEVC works for every size (up to 8192 pixels wide, on GTX 10xx cards and newer); for the 16:9 videos `h264_nvenc` works too (with `encoder_options = ["-preset", "p5", "-rc", "vbr", "-cq", "20", "-b:v", "0"]`), but not for the 7680x1080 ones, since H.264 stops at 4096 pixels. To check: `ffmpeg -hide_banner -encoders | grep nvenc` should list `hevc_nvenc`, and `ffmpeg -f lavfi -i testsrc2=size=7680x1080:rate=60 -t 2 -c:v hevc_nvenc -f null -` should end without errors.
+Without the driver the program reports `Cannot load libcuda.so.1` and tries the next GPU. The 7680x1080 videos (HEVC that wide) need a GTX 10xx card or newer. To check the driver: `ffmpeg -f lavfi -i testsrc2=size=7680x1080:rate=60 -t 2 -c:v hevc_nvenc -f null -` should end without errors.
 
 ### ffmpeg
 

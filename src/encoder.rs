@@ -1,11 +1,11 @@
-//! The video encoder: a GPU through VAAPI (AMD and Intel on Linux) when one can encode the
-//! video, else the CPU encoder of the settings. Whether a GPU works is found out by encoding a
-//! few frames with it: drivers without the codecs (e.g. Fedora's Mesa), frames too big for
-//! the hardware and missing devices all show up there.
+//! The video encoder: a GPU when one can encode the video (NVIDIA through NVENC, AMD and
+//! Intel through VAAPI), else the CPU encoder of the settings. Whether a GPU works is found
+//! out by encoding a few frames with it: missing drivers, drivers without the codecs (e.g.
+//! Fedora's Mesa), frames too big for the hardware and missing devices all show up there.
 
 use std::collections::{HashMap, HashSet};
 use std::io::Read;
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
 use std::process::{Command, Stdio};
 use std::sync::{Mutex, OnceLock};
 use std::time::{Duration, Instant};
@@ -67,29 +67,77 @@ impl Encoder {
         }
         Encoder { name: format!("{codec} on {device}"), global: strings(&["-vaapi_device", device]), output }
     }
+
+    /// `codec` (h264_nvenc or hevc_nvenc) on the NVIDIA GPU of index `gpu`
+    fn nvenc(gpu: usize, codec: &str, quality: u32) -> Encoder {
+        let q = quality.to_string();
+        let mut output = strings(&["-c:v", codec, "-gpu", &gpu.to_string(), "-preset", "p5"]);
+        // constant quality: "-cq" with a variable bitrate and no bitrate target
+        output.extend(strings(&["-rc", "vbr", "-cq", &q, "-b:v", "0", "-pix_fmt", "yuv420p"]));
+        if codec.starts_with("hevc") {
+            output.extend(strings(&["-tag:v", "hvc1"]));
+        }
+        Encoder { name: format!("{codec} on NVIDIA GPU {gpu}"), global: vec![], output }
+    }
 }
 
-/// The GPUs to try, from `video.hardware`: "auto" (all of them), "off" (none) or a device
-fn devices(setting: &str) -> Vec<String> {
+/// A GPU to try
+#[derive(Clone, Debug, PartialEq)]
+enum Gpu {
+    /// NVIDIA, by index (as in /dev/nvidia0)
+    Nvidia(usize),
+    /// A VAAPI device, e.g. /dev/dri/renderD128
+    Vaapi(String),
+}
+
+impl Gpu {
+    /// The encoders to test on this GPU, best first
+    fn encoders(&self, quality: u32, w: u32, h: u32) -> Vec<Encoder> {
+        codecs(w, h)
+            .iter()
+            .map(|codec| match self {
+                Gpu::Nvidia(i) => Encoder::nvenc(*i, &format!("{codec}_nvenc"), quality),
+                Gpu::Vaapi(device) => Encoder::vaapi(device, &format!("{codec}_vaapi"), quality, w, h),
+            })
+            .collect()
+    }
+}
+
+/// The GPUs to try, from `video.hardware` and the devices in `dev` (normally /dev): "auto"
+/// (all of them, NVIDIA first: usually the faster), "off" (none) or a device, e.g.
+/// "/dev/nvidia0" or "/dev/dri/renderD128"
+fn gpus(setting: &str, dev: &Path) -> Vec<Gpu> {
+    let nvidia_index = |name: &str| name.strip_prefix("nvidia").and_then(|n| n.parse::<usize>().ok());
     match setting.trim() {
         "off" | "" => vec![],
         "auto" => {
-            let mut v: Vec<PathBuf> = std::fs::read_dir("/dev/dri")
+            let names: Vec<String> = std::fs::read_dir(dev)
+                .into_iter()
+                .flatten()
+                .filter_map(|e| e.ok().map(|e| e.file_name().to_string_lossy().into_owned()))
+                .collect();
+            let mut nvidia: Vec<usize> = names.iter().filter_map(|n| nvidia_index(n)).collect();
+            nvidia.sort();
+            let mut vaapi: Vec<PathBuf> = std::fs::read_dir(dev.join("dri"))
                 .into_iter()
                 .flatten()
                 .filter_map(|e| e.ok().map(|e| e.path()))
                 .filter(|p| p.file_name().is_some_and(|n| n.to_string_lossy().starts_with("renderD")))
                 .collect();
-            v.sort();
-            v.into_iter().map(|p| p.to_string_lossy().into_owned()).collect()
+            vaapi.sort();
+            let vaapi = vaapi.into_iter().map(|p| Gpu::Vaapi(p.to_string_lossy().into_owned()));
+            nvidia.into_iter().map(Gpu::Nvidia).chain(vaapi).collect()
         }
-        device => vec![device.to_string()],
+        device => match Path::new(device).file_name().and_then(|n| nvidia_index(&n.to_string_lossy())) {
+            Some(i) => vec![Gpu::Nvidia(i)],
+            None => vec![Gpu::Vaapi(device.to_string())],
+        },
     }
 }
 
 /// H.264 plays everywhere, but hardware encoders stop at 4096 pixels: HEVC goes further
 fn codecs(w: u32, h: u32) -> &'static [&'static str] {
-    if w <= 4096 && h <= 4096 { &["h264_vaapi", "hevc_vaapi"] } else { &["hevc_vaapi"] }
+    if w <= 4096 && h <= 4096 { &["h264", "hevc"] } else { &["hevc"] }
 }
 
 /// Encodes a few black frames of the video's size, and checks that they decode at that size:
@@ -163,7 +211,16 @@ fn encode_test(encoder: &Encoder, w: u32, h: u32, fps: f64, file: &std::path::Pa
 
 /// The line of ffmpeg's log that best explains a failure, without its "[name @ 0x...]" prefix
 fn reason(log: &str) -> String {
-    let telling = ["not supported", "does not support", "No such file", "Failed to", "failed", "Error while opening"];
+    let telling = [
+        "not supported",
+        "does not support",
+        "Cannot load",
+        "No capable devices",
+        "No such file",
+        "Failed to",
+        "failed",
+        "Error while opening",
+    ];
     let line = telling
         .iter()
         .find_map(|t| log.lines().find(|l| l.contains(t)))
@@ -204,14 +261,13 @@ fn openh264(w: u32, h: u32, fps: f64) -> Encoder {
 /// The GPU encoder that passed the test, or why none did
 fn hardware(config: &Config, w: u32, h: u32, fps: f64) -> Result<Encoder, String> {
     let setting = &config.video.hardware;
-    let devices = devices(setting);
-    if devices.is_empty() {
-        return Err(if setting.trim() == "off" { "off in the settings".into() } else { "no GPU found".into() });
+    let gpus = gpus(setting, Path::new("/dev"));
+    if gpus.is_empty() {
+        return Err(if setting.trim() == "off" { "GPU encoding is off in the settings".into() } else { "no GPU found".into() });
     }
     let mut failures = vec![];
-    for device in &devices {
-        for codec in codecs(w, h) {
-            let encoder = Encoder::vaapi(device, codec, config.video.hardware_qp, w, h);
+    for gpu in &gpus {
+        for encoder in gpu.encoders(config.video.hardware_qp, w, h) {
             match probe(&encoder, w, h, fps) {
                 Ok(()) => return Ok(encoder),
                 Err(e) => failures.push(format!("{}: {e}", encoder.name)),
@@ -254,7 +310,7 @@ pub fn choose(config: &Config, w: u32, h: u32, fps: f64) -> Result<Vec<Encoder>>
         };
         match &gpu {
             Ok(_) => println!("Encoder: {} (GPU)", first.name),
-            Err(why) => println!("Encoder: {} (CPU: {why})", first.name),
+            Err(why) => println!("Encoder: {} (CPU): {why}", first.name),
         }
         for note in &notes {
             println!("  note: {note}");
@@ -270,14 +326,37 @@ mod tests {
 
     #[test]
     fn wide_videos_need_hevc() {
-        assert_eq!(codecs(1920, 1080), ["h264_vaapi", "hevc_vaapi"]);
-        assert_eq!(codecs(7680, 1080), ["hevc_vaapi"]);
+        let names = |gpu: Gpu, w| gpu.encoders(20, w, 1080).into_iter().map(|e| e.name).collect::<Vec<_>>();
+        assert_eq!(names(Gpu::Nvidia(0), 1920), ["h264_nvenc on NVIDIA GPU 0", "hevc_nvenc on NVIDIA GPU 0"]);
+        assert_eq!(names(Gpu::Vaapi("/dev/dri/renderD128".into()), 7680), ["hevc_vaapi on /dev/dri/renderD128"]);
     }
 
     #[test]
-    fn device_setting() {
-        assert!(devices("off").is_empty());
-        assert_eq!(devices("/dev/dri/renderD129"), ["/dev/dri/renderD129"]);
+    fn gpus_from_the_setting() {
+        let dev = Path::new("/nonexistent");
+        assert!(gpus("off", dev).is_empty());
+        assert!(gpus("auto", dev).is_empty());
+        assert_eq!(gpus("/dev/dri/renderD129", dev), [Gpu::Vaapi("/dev/dri/renderD129".into())]);
+        assert_eq!(gpus("/dev/nvidia1", dev), [Gpu::Nvidia(1)]);
+    }
+
+    #[test]
+    fn auto_finds_nvidia_first() {
+        let dev = std::env::temp_dir().join(format!("oii-ranking-dev-{}", std::process::id()));
+        std::fs::create_dir_all(dev.join("dri")).unwrap();
+        for f in ["nvidia1", "nvidia0", "nvidiactl", "nvidia-uvm", "dri/renderD128", "dri/card0"] {
+            std::fs::write(dev.join(f), "").unwrap();
+        }
+        let found = gpus("auto", &dev);
+        std::fs::remove_dir_all(&dev).unwrap();
+        let render = dev.join("dri/renderD128").to_string_lossy().into_owned();
+        assert_eq!(found, [Gpu::Nvidia(0), Gpu::Nvidia(1), Gpu::Vaapi(render)]);
+    }
+
+    #[test]
+    fn nvenc_uses_constant_quality() {
+        let args = Encoder::nvenc(1, "hevc_nvenc", 20).output.join(" ");
+        assert!(args.contains("-c:v hevc_nvenc -gpu 1") && args.contains("-rc vbr -cq 20 -b:v 0"), "{args}");
     }
 
     #[test]
@@ -285,6 +364,9 @@ mod tests {
         let log = "[h264_vaapi @ 0x55] Compatible profile VAProfileH264High (7) is not supported by driver.\n\
                    [vost#0:0/h264_vaapi @ 0x55] Error while opening encoder - maybe incorrect parameters";
         assert_eq!(reason(log), "Compatible profile VAProfileH264High (7) is not supported by driver.");
+        let log = "[vost#0:0/h264_nvenc @ 0x56] Starting thread...\n[h264_nvenc @ 0x56] Cannot load libcuda.so.1\n\
+                   [vost#0:0/h264_nvenc @ 0x56] Error while opening encoder";
+        assert_eq!(reason(log), "Cannot load libcuda.so.1");
     }
 
     #[test]
