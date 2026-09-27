@@ -17,6 +17,7 @@ use yuvutils_rs::{BufferStoreMut, YuvConversionMode, YuvPlanarImageMut, YuvRange
 
 use crate::encoder::Encoder;
 use crate::images::Images;
+use crate::interrupt;
 use crate::preview::{self, Preview};
 use crate::timeline::{Drawn, Scene, Vis};
 use crate::vector::{self, Reveal};
@@ -261,6 +262,10 @@ pub fn render_video(scene: &Scene, canvas: &Canvas, images: &Images, opts: &Vide
                 );
                 return Ok(());
             }
+            Err(e) if e.is::<interrupt::Interrupted>() => {
+                eprintln!("{}: stopped; the video rendered so far is in {}", opts.label, partial.display());
+                return Err(e);
+            }
             Err(e) => match opts.encoders.get(i + 1) {
                 Some(next) => {
                     eprintln!(
@@ -299,7 +304,9 @@ fn encode(
         cmd.args(["-movflags", "+faststart"]);
     }
     cmd.arg(partial).stdin(Stdio::piped());
-    let mut child = cmd.spawn().context("starting ffmpeg (is it installed?)")?;
+    // from now on, Ctrl+C stops the render cleanly
+    let _rendering = interrupt::Rendering::start();
+    let mut child = interrupt::spawn_detached(&mut cmd).context("starting ffmpeg (is it installed?)")?;
     let mut stdin = child.stdin.take().unwrap();
 
     let changed = scene.changed_frames();
@@ -334,6 +341,9 @@ fn encode(
     let mut rendered = 0usize;
     let mut result = Ok(());
     'outer: for (epoch, start) in (first..last).step_by(chunk).enumerate() {
+        if interrupt::requested() {
+            break;
+        }
         let end = (start + chunk).min(last);
         let epoch = epoch + 1;
         let frames: Vec<Option<Arc<Vec<u8>>>> = (start..end)
@@ -374,7 +384,12 @@ fn encode(
     drop(tx);
     eprintln!();
     let write_result = writer.join().expect("writer thread");
-    let status = child.wait().context("waiting for ffmpeg")?;
+    let status = child.wait();
+    interrupt::forget(&child);
+    let status = status.context("waiting for ffmpeg")?;
+    if interrupt::requested() {
+        return Err(interrupt::Interrupted.into());
+    }
     if !status.success() {
         bail!("ffmpeg failed ({status})");
     }

@@ -9,6 +9,8 @@ use std::sync::mpsc::{SyncSender, TrySendError, sync_channel};
 use std::thread::JoinHandle;
 use std::time::{Duration, Instant};
 
+use crate::interrupt;
+
 #[derive(Clone, Copy, Debug, PartialEq, Eq, clap::ValueEnum)]
 pub enum Mode {
     /// Show the frames as fast as they are rendered (frames are skipped if the window is slower)
@@ -49,15 +51,16 @@ impl Preview {
         // frame rate, each frame is late when it arrives and is shown at once (or dropped, if a
         // newer one is already there)
         let rate = if mode == Mode::Realtime { format!("{fps}") } else { "1000".into() };
-        let spawned = Command::new("ffplay")
-            .args(["-hide_banner", "-loglevel", "error", "-autoexit", "-framedrop"])
-            .args(["-window_title", &format!("{label} (rendering)"), "-x", &width.to_string()])
-            .args(["-f", "rawvideo", "-pixel_format", "yuv420p"])
-            .args(["-video_size", &format!("{w}x{h}"), "-framerate", &rate, "-i", "-"])
-            .stdin(Stdio::piped())
-            .stdout(Stdio::null())
-            .stderr(Stdio::null())
-            .spawn();
+        let spawned = interrupt::spawn_detached(
+            Command::new("ffplay")
+                .args(["-hide_banner", "-loglevel", "error", "-autoexit", "-framedrop"])
+                .args(["-window_title", &format!("{label} (rendering)"), "-x", &width.to_string()])
+                .args(["-f", "rawvideo", "-pixel_format", "yuv420p"])
+                .args(["-video_size", &format!("{w}x{h}"), "-framerate", &rate, "-i", "-"])
+                .stdin(Stdio::piped())
+                .stdout(Stdio::null())
+                .stderr(Stdio::null()),
+        );
         let mut child = match spawned {
             Ok(child) => child,
             Err(e) => {
@@ -86,6 +89,12 @@ impl Preview {
 
     /// Shows a frame (in the realtime mode, waits until the window takes it)
     pub fn show(&mut self, frame: &Arc<Vec<u8>>) {
+        if interrupt::requested() && self.feed.is_some() {
+            // the render is being stopped: close the window at once
+            self.feed = None;
+            let _ = self.child.kill();
+            return;
+        }
         let ok = match &mut self.feed {
             None => return,
             Some(Feed::Blocking(stdin)) => stdin.write_all(frame).is_ok(),
@@ -116,6 +125,7 @@ impl Preview {
             None => {}
         }
         let _ = self.child.wait();
+        interrupt::forget(&self.child);
     }
 }
 
@@ -124,7 +134,8 @@ impl Drop for Preview {
     fn drop(&mut self) {
         if self.feed.is_some() {
             let _ = self.child.kill();
-            let _ = self.child.wait();
         }
+        let _ = self.child.wait();
+        interrupt::forget(&self.child);
     }
 }

@@ -4,6 +4,7 @@ mod config;
 mod data;
 mod encoder;
 mod images;
+mod interrupt;
 mod preprocess;
 mod preview;
 mod render;
@@ -190,8 +191,20 @@ fn build(
     Ok((scene, canvas))
 }
 
-fn main() -> Result<()> {
+fn main() {
     let cli = Cli::parse();
+    interrupt::install();
+    match run(cli) {
+        Ok(()) => {}
+        Err(e) if e.is::<interrupt::Interrupted>() => std::process::exit(130),
+        Err(e) => {
+            eprintln!("Error: {e:?}");
+            std::process::exit(1);
+        }
+    }
+}
+
+fn run(cli: Cli) -> Result<()> {
     std::env::set_current_dir(&cli.dir).with_context(|| format!("entering {}", cli.dir.display()))?;
     let config = Config::load(Some(&cli.config))?;
 

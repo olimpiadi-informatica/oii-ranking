@@ -61,6 +61,8 @@ oii-ranking render gold --from 60 --to 75          # a part of the video, in sec
 
 While rendering, the video is shown in a window (with `ffplay`, which comes with ffmpeg), as fast as it is rendered. `--preview realtime` plays it at its real speed instead, slowing the render down if it is faster, and `--preview off` shows nothing. Closing the window does not stop the render; without a display or `ffplay`, the render goes on without the window.
 
+Ctrl+C stops a render cleanly: the frames already drawn are encoded and the video rendered so far is kept as `<Medal>.partial.mp4` (a finished video is never replaced by a partial one). A second Ctrl+C quits at once.
+
 There is no cache to clean: every render starts from the data.
 
 Rendering time on a 16-core laptop (Ryzen 9 6900HX), encoding on the CPU with x264: the gold video (2.5 minutes, 9 contestants) takes about 50 seconds at 1080p60 and about 2.5 minutes for the 7680x1080 version. About half of the time goes into the encoder, and most of the rest into decoding the JPEG XL screenshots of the timelapses (one per frame). Encoding on an AMD GPU (RX 6650M) makes the 7680x1080 version about 1.6 times faster.
