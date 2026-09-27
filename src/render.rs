@@ -17,6 +17,7 @@ use yuvutils_rs::{BufferStoreMut, YuvConversionMode, YuvPlanarImageMut, YuvRange
 
 use crate::encoder::Encoder;
 use crate::images::Images;
+use crate::preview::{self, Preview};
 use crate::timeline::{Drawn, Scene, Vis};
 use crate::vector::{self, Reveal};
 
@@ -228,6 +229,8 @@ pub struct VideoOptions {
     /// Frames to render: [first, last)
     pub frames: (usize, usize),
     pub label: String,
+    /// The window showing the video while it is rendered
+    pub preview: preview::Mode,
 }
 
 pub fn render_video(scene: &Scene, canvas: &Canvas, images: &Images, opts: &VideoOptions) -> Result<()> {
@@ -306,9 +309,22 @@ fn encode(
     let chunk = ((1 << 30) / frame_bytes).clamp(threads, 2 * threads);
     // room for two chunks: the next chunk is rendered while ffmpeg encodes the last one
     let (tx, rx) = sync_channel::<Arc<Vec<u8>>>(2 * chunk);
+    // the window showing the video (not for the transparent overlays)
+    let preview = match opts.transparent {
+        true => None,
+        false => Preview::open(opts.preview, canvas.w, canvas.h, scene.fps, &opts.label),
+    };
     let writer = std::thread::spawn(move || -> std::io::Result<()> {
+        let mut preview = preview;
         for frame in rx {
+            // in the realtime mode this waits for the window, and so the render does
+            if let Some(p) = &mut preview {
+                p.show(&frame);
+            }
             stdin.write_all(&frame)?;
+        }
+        if let Some(p) = preview {
+            p.finish();
         }
         Ok(())
     });

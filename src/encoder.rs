@@ -263,7 +263,11 @@ fn hardware(config: &Config, w: u32, h: u32, fps: f64) -> Result<Encoder, String
     let setting = &config.video.hardware;
     let gpus = gpus(setting, Path::new("/dev"));
     if gpus.is_empty() {
-        return Err(if setting.trim() == "off" { "GPU encoding is off in the settings".into() } else { "no GPU found".into() });
+        return Err(if setting.trim() == "off" {
+            "GPU encoding is off in the settings".into()
+        } else {
+            "no GPU found".into()
+        });
     }
     let mut failures = vec![];
     for gpu in &gpus {

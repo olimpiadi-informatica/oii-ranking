@@ -5,6 +5,7 @@ mod data;
 mod encoder;
 mod images;
 mod preprocess;
+mod preview;
 mod render;
 mod scenes;
 mod text;
@@ -65,6 +66,10 @@ enum Command {
         /// End of the part to render, in seconds
         #[arg(long)]
         to: Option<f64>,
+        /// Show the video in a window while it is rendered: as fast as it is rendered (fast), at
+        /// its real speed, slowing the render down if needed (realtime), or not at all (off)
+        #[arg(long, value_enum, default_value = "fast")]
+        preview: preview::Mode,
     },
     /// Render a single frame to a PNG, to check the layout
     Still {
@@ -195,7 +200,7 @@ fn main() -> Result<()> {
             let opts = preprocess::Options { faces_dir, ranking_dir, ranking_csv, output_dir, terry };
             preprocess::run(&config, &opts)
         }
-        Command::Render { medal, video, output, from, to } => {
+        Command::Render { medal, video, output, from, to, preview } => {
             let medals = parse_medals(&medal)?;
             if output.is_some() && medals.len() > 1 {
                 bail!("--output needs a single medal");
@@ -227,6 +232,7 @@ fn main() -> Result<()> {
                     path,
                     transparent: false,
                     encoders: encoder::choose(&config, canvas.w, canvas.h, scene.fps)?,
+                    preview,
                     frames: (first, last),
                     label: m.title().to_string(),
                 };
@@ -262,6 +268,7 @@ fn main() -> Result<()> {
                 path,
                 transparent: true,
                 encoders: vec![encoder::Encoder::prores()],
+                preview: preview::Mode::Off,
                 frames: (0, scene.total_frames()),
                 label: name.to_string(),
             };
