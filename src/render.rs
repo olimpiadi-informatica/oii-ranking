@@ -426,7 +426,11 @@ pub fn render_video(scene: &Scene, canvas: &Canvas, images: &Images, opts: &Vide
     let changed = scene.changed_frames();
     let yuv = YuvFrames::new(scene, canvas);
     let threads = rayon::current_num_threads();
-    let (tx, rx) = sync_channel::<Arc<Vec<u8>>>(threads);
+    // frames rendered together: enough to keep every thread busy, within about 1 GB
+    let frame_bytes = canvas.w as usize * canvas.h as usize * 4;
+    let chunk = ((1 << 30) / frame_bytes).clamp(threads, 2 * threads);
+    // room for two chunks: the next chunk is rendered while ffmpeg encodes the last one
+    let (tx, rx) = sync_channel::<Arc<Vec<u8>>>(2 * chunk);
     let writer = std::thread::spawn(move || -> std::io::Result<()> {
         for frame in rx {
             stdin.write_all(&frame)?;
@@ -437,9 +441,6 @@ pub fn render_video(scene: &Scene, canvas: &Canvas, images: &Images, opts: &Vide
     let started = Instant::now();
     let mut previous: Option<Arc<Vec<u8>>> = None;
     let mut rendered = 0usize;
-    // frames rendered together: enough to keep every thread busy, within about 1 GB
-    let frame_bytes = canvas.w as usize * canvas.h as usize * 4;
-    let chunk = ((1 << 30) / frame_bytes).clamp(threads, 2 * threads);
     let mut result = Ok(());
     'outer: for (epoch, start) in (first..last).step_by(chunk).enumerate() {
         let end = (start + chunk).min(last);
