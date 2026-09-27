@@ -189,6 +189,9 @@ pub struct Colors {
 
 #[derive(Clone, Debug, Deserialize)]
 pub struct Video {
+    /// "auto", "off" or a device (see config.toml)
+    pub hardware: String,
+    pub hardware_qp: u32,
     pub encoder: String,
     pub encoder_options: Vec<String>,
 }

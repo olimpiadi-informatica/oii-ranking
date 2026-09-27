@@ -61,7 +61,24 @@ oii-ranking render gold --from 60 --to 75          # a part of the video, in sec
 
 There is no cache to clean: every render starts from the data.
 
-Rendering time on a 16-core machine, with the default x264 settings: the gold video (2.5 minutes, 9 contestants) takes about 1.5 minutes at 1080p60 and about 3 minutes for the 7680x1080 version. Most of the time goes into the encoder and into decoding the JPEG XL screenshots of the timelapses (one per frame). A GPU encoder can help: set `video.encoder` to e.g. `hevc_nvenc` and `video.encoder_options` to `["-preset", "p5", "-cq", "20"]` (NVENC h264 is limited to 4096 pixels of width, so use hevc for the wide version).
+Rendering time on a 16-core laptop (Ryzen 9 6900HX), encoding on the CPU with x264: the gold video (2.5 minutes, 9 contestants) takes about 50 seconds at 1080p60 and about 2.5 minutes for the 7680x1080 version. About half of the time goes into the encoder, and most of the rest into decoding the JPEG XL screenshots of the timelapses (one per frame). Encoding on the GPU makes the 7680x1080 version about 1.6 times faster.
+
+## Hardware encoding
+
+By default (`video.hardware = "auto"` in `config.toml`) the program encodes with the GPU when it can, through VAAPI (AMD and Intel GPUs on Linux). Before rendering, it encodes a few test frames of the video's size on each GPU and uses the first one that works: H.264, or HEVC for videos wider than 4096 pixels (the most H.264 hardware encoders accept), such as the 7680x1080 version. It prints which encoder it uses, and when no GPU works, why.
+
+When no GPU can encode the video, the CPU encoder of the settings (`video.encoder`, x264 by default) is used. If the GPU fails in the middle of a render, the video is rendered again with the CPU encoder. If ffmpeg has no x264 (Fedora's own ffmpeg does not), `libopenh264` is used instead, up to 4096 pixels of width. Set `video.hardware = "off"` to always use the CPU, or to a device (e.g. `"/dev/dri/renderD128"`) to use a given GPU.
+
+Fedora's Mesa drivers come without the H.264 and HEVC encoders (for patent reasons), so the program reports `Compatible profile ... is not supported by driver` and uses the CPU. To get the complete drivers from RPM Fusion:
+
+```
+sudo dnf install https://mirrors.rpmfusion.org/free/fedora/rpmfusion-free-release-$(rpm -E %fedora).noarch.rpm
+sudo dnf swap mesa-va-drivers mesa-va-drivers-freeworld
+```
+
+Check with `vainfo` (package `libva-utils`): `vainfo --display drm --device /dev/dri/renderD128 | grep EncSlice` should list `VAProfileH264High` and `VAProfileHEVCMain`. To undo: `sudo dnf swap mesa-va-drivers-freeworld mesa-va-drivers`. On Ubuntu and Debian the standard `mesa-va-drivers` package already has the encoders.
+
+A 7680x1080 HEVC video needs a player (and a machine) that can decode HEVC that wide: check it on the computer that will play it.
 
 ## Settings
 

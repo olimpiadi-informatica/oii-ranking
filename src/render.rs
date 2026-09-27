@@ -16,6 +16,7 @@ use rayon::prelude::*;
 use resvg::tiny_skia;
 use yuvutils_rs::{BufferStoreMut, YuvConversionMode, YuvPlanarImageMut, YuvRange, YuvStandardMatrix};
 
+use crate::encoder::Encoder;
 use crate::images::Images;
 use crate::timeline::{Drawn, Scene, Segments, Vis};
 use crate::vector::{self, Reveal};
@@ -383,8 +384,8 @@ pub fn save_png(pixmap: tiny_skia::Pixmap, path: &Path) -> Result<()> {
 pub struct VideoOptions {
     pub path: PathBuf,
     pub transparent: bool,
-    pub encoder: String,
-    pub encoder_options: Vec<String>,
+    /// Encoders to try in order: if one fails, the video is rendered again with the next
+    pub encoders: Vec<Encoder>,
     /// Frames to render: [first, last)
     pub frames: (usize, usize),
     pub label: String,
@@ -404,22 +405,58 @@ pub fn render_video(scene: &Scene, canvas: &Canvas, images: &Images, opts: &Vide
     let ext = opts.path.extension().and_then(|e| e.to_str()).unwrap_or("mp4").to_string();
     let partial = opts.path.with_extension(format!("partial.{ext}"));
 
+    for (i, encoder) in opts.encoders.iter().enumerate() {
+        match encode(scene, canvas, images, opts, (first, last), &partial, encoder) {
+            Ok(elapsed) => {
+                std::fs::rename(&partial, &opts.path)
+                    .with_context(|| format!("renaming to {}", opts.path.display()))?;
+                eprintln!(
+                    "{}: {} ({:.1}s of video in {:.1}s)",
+                    opts.label,
+                    opts.path.display(),
+                    (last - first) as f64 / scene.fps,
+                    elapsed
+                );
+                return Ok(());
+            }
+            Err(e) => match opts.encoders.get(i + 1) {
+                Some(next) => {
+                    eprintln!(
+                        "!!! {} failed: {e:#}\n!!! rendering {} again with {}",
+                        encoder.name, opts.label, next.name
+                    )
+                }
+                None => return Err(e.context(format!("the partial output is in {}", partial.display()))),
+            },
+        }
+    }
+    bail!("no video encoder")
+}
+
+/// Renders the frames and encodes them with `encoder` into `partial`; returns the seconds taken
+fn encode(
+    scene: &Scene,
+    canvas: &Canvas,
+    images: &Images,
+    opts: &VideoOptions,
+    (first, last): (usize, usize),
+    partial: &Path,
+    encoder: &Encoder,
+) -> Result<f64> {
     let mut cmd = Command::new("ffmpeg");
-    cmd.args(["-hide_banner", "-loglevel", "error", "-y", "-f", "rawvideo"]);
+    cmd.args(["-hide_banner", "-loglevel", "error", "-y"]).args(&encoder.global).args(["-f", "rawvideo"]);
     if opts.transparent {
         cmd.args(["-pix_fmt", "rgba"]);
     } else {
         cmd.args(["-pix_fmt", "yuv420p", "-colorspace", "bt709", "-color_range", "tv"]);
     }
     cmd.args(["-s", &format!("{}x{}", canvas.w, canvas.h), "-framerate", &format!("{}", scene.fps), "-i", "-"]);
-    if opts.transparent {
-        cmd.args(["-c:v", "prores_ks", "-profile:v", "4444", "-pix_fmt", "yuva444p10le"]);
-    } else {
-        cmd.args(["-c:v", &opts.encoder]).args(&opts.encoder_options).args(["-pix_fmt", "yuv420p"]);
+    cmd.args(&encoder.output);
+    if !opts.transparent {
         cmd.args(["-colorspace", "bt709", "-color_primaries", "bt709", "-color_trc", "bt709", "-color_range", "tv"]);
         cmd.args(["-movflags", "+faststart"]);
     }
-    cmd.arg(&partial).stdin(Stdio::piped());
+    cmd.arg(partial).stdin(Stdio::piped());
     let mut child = cmd.spawn().context("starting ffmpeg (is it installed?)")?;
     let mut stdin = child.stdin.take().unwrap();
 
@@ -485,20 +522,12 @@ pub fn render_video(scene: &Scene, canvas: &Canvas, images: &Images, opts: &Vide
     eprintln!();
     let write_result = writer.join().expect("writer thread");
     let status = child.wait().context("waiting for ffmpeg")?;
+    if !status.success() {
+        bail!("ffmpeg failed ({status})");
+    }
     result?;
     write_result.context("sending frames to ffmpeg")?;
-    if !status.success() {
-        bail!("ffmpeg failed ({status}); the partial output is in {}", partial.display());
-    }
-    std::fs::rename(&partial, &opts.path).with_context(|| format!("renaming to {}", opts.path.display()))?;
-    eprintln!(
-        "{}: {} ({:.1}s of video in {:.1}s)",
-        opts.label,
-        opts.path.display(),
-        (last - first) as f64 / scene.fps,
-        started.elapsed().as_secs_f64()
-    );
-    Ok(())
+    Ok(started.elapsed().as_secs_f64())
 }
 
 #[cfg(test)]

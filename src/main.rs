@@ -2,6 +2,7 @@
 
 mod config;
 mod data;
+mod encoder;
 mod images;
 mod preprocess;
 mod render;
@@ -225,8 +226,7 @@ fn main() -> Result<()> {
                 let opts = VideoOptions {
                     path,
                     transparent: false,
-                    encoder: config.video.encoder.clone(),
-                    encoder_options: config.video.encoder_options.clone(),
+                    encoders: encoder::choose(&config, canvas.w, canvas.h, scene.fps)?,
                     frames: (first, last),
                     label: m.title().to_string(),
                 };
@@ -261,8 +261,7 @@ fn main() -> Result<()> {
             let opts = VideoOptions {
                 path,
                 transparent: true,
-                encoder: String::new(),
-                encoder_options: vec![],
+                encoders: vec![encoder::Encoder::prores()],
                 frames: (0, scene.total_frames()),
                 label: name.to_string(),
             };
